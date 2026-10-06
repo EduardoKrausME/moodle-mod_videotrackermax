@@ -443,7 +443,10 @@ class service {
         $groupmode = groups_get_activity_groupmode($this->cm);
         if ($groupmode == SEPARATEGROUPS && !has_capability('moodle/site:accessallgroups', $this->context)) {
             $own = groups_get_all_groups((int)$this->activity->course, (int)$USER->id, (int)$this->cm->groupingid);
-            $population = $this->users_in_groups(array_map('intval', array_keys($own)));
+            $population = $this->intersect(
+                $population,
+                $this->users_in_groups(array_map('intval', array_keys($own)))
+            );
         }
 
         $groupid = max(0, (int)($filters['groupid'] ?? 0));
