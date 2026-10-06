@@ -7,8 +7,8 @@ class filters {
         $toraw = optional_param('to', '', PARAM_RAW_TRIMMED);
 
         return [
-            'from' => self::parse_date($fromraw, false),
-            'to' => self::parse_date($toraw, true),
+            'from' => self::parse_date_value($fromraw, false),
+            'to' => self::parse_date_value($toraw, true),
             'fromdate' => self::valid_date($fromraw) ? $fromraw : '',
             'todate' => self::valid_date($toraw) ? $toraw : '',
             'groupid' => max(0, optional_param('groupid', 0, PARAM_INT)),
@@ -39,7 +39,7 @@ class filters {
         return in_array($status, ['all', 'completed', 'incomplete'], true) ? $status : 'all';
     }
 
-    private static function parse_date(string $value, bool $endofday): int {
+    public static function parse_date_value(string $value, bool $endofday = false): int {
         if (!self::valid_date($value)) {
             return 0;
         }
