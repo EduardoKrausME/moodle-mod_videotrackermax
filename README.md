@@ -42,3 +42,12 @@ CSV exports contain consolidated report metrics, not internal bridge telemetry.
 ## Completion
 
 Custom completion uses the authoritative normalized percentage stored by Video Bridge. Video Tracker Max does not maintain a competing progress percentage.
+
+
+## Comparisons and individual drill-down
+
+Collective comparison supports Moodle groups, groupings, cohorts when the viewer has the required cohort capability, and two independent date periods. Retention curves are overlaid using the same filters so the populations remain comparable.
+
+The Learners tab is intentionally secondary to the collective dashboards. Users with the dedicated individual-report capability can drill into one learner to inspect consolidated watched percentage, watch time, sessions, playback speed, end reached, the authoritative Video Bridge progress, an individual viewing map and daily summaries.
+
+The configured minimum-population threshold applies to collective analytics and comparisons, not to explicitly authorized individual reports.
