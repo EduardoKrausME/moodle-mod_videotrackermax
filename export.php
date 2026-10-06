@@ -17,7 +17,7 @@ $filters = filters::from_request();
 $report = new service($activity, $cm, $context);
 $metrics = $report->metrics($filters);
 
-if ($metrics['population'] > 0 && $metrics['population'] < $report->minimum_population()) {
+if ($metrics['suppressed']) {
     throw new moodle_exception('suppressedexport', 'videotrackermax');
 }
 
