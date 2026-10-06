@@ -1,0 +1,38 @@
+<?php
+defined('MOODLE_INTERNAL') || die;
+
+$string['pluginname'] = 'Video Tracker Max';
+$string['modulename'] = 'Video Tracker Max';
+$string['modulenameplural'] = 'Atividades Video Tracker Max';
+$string['videotrackermaxname'] = 'Nome da atividade';
+$string['source'] = 'Fonte do vídeo';
+$string['videosource'] = 'Fonte do vídeo';
+$string['analyticssettings'] = 'Analytics';
+$string['bucketcount'] = 'Granularidade do heatmap';
+$string['bucketcount_help'] = 'Quantidade de buckets materializados na timeline. Isso não cria uma linha no banco a cada timeupdate do player.';
+$string['showstudentprogress'] = 'Mostrar o próprio progresso ao aluno';
+$string['completionpercent'] = 'Percentual mínimo assistido';
+$string['completiondetail:percent'] = 'Assistir pelo menos {$a}% do vídeo';
+$string['dashboard'] = 'Analytics';
+$string['yourprogress'] = 'Seu progresso';
+$string['nosources'] = 'Nenhuma fonte do Video Bridge com tracking confiável está disponível.';
+$string['minaggregateusers'] = 'Mínimo de usuários nos analytics coletivos';
+$string['minaggregateusers_desc'] = 'Estatísticas e comparações coletivas são ocultadas quando a população selecionada possui menos usuários que este limite.';
+$string['eventaggregationrebuilt'] = 'Agregação de analytics reconstruída';
+$string['privacy:metadata'] = 'O Video Tracker Max materializa analytics compactos por aluno e dia derivados da telemetria do Video Bridge.';
+$string['privacy:metadata:user'] = 'Resumo materializado por aluno e dia.';
+$string['privacy:metadata:user:userid'] = 'O aluno representado pelo resumo.';
+$string['privacy:metadata:user:percent'] = 'O percentual de buckets da timeline alcançados.';
+$string['privacy:metadata:user:watchtime'] = 'O tempo real estimado de reprodução.';
+$string['privacy:metadata:user:sessions'] = 'A quantidade de sessões de reprodução.';
+$string['privacy:metadata:user:day'] = 'O dia do relatório.';
+$string['privacy:metadata:bucket'] = 'Analytics materializados por aluno e trecho da timeline.';
+$string['privacy:metadata:bucket:userid'] = 'O aluno representado pelo bucket.';
+$string['privacy:metadata:bucket:bucket'] = 'O número normalizado do bucket na timeline.';
+$string['privacy:metadata:bucket:watched'] = 'Se o aluno assistiu ao bucket.';
+$string['videotrackermax:addinstance'] = 'Adicionar atividade Video Tracker Max';
+$string['videotrackermax:view'] = 'Visualizar Video Tracker Max';
+$string['videotrackermax:viewanalytics'] = 'Visualizar analytics coletivos';
+$string['videotrackermax:viewindividual'] = 'Visualizar analytics individuais';
+$string['videotrackermax:export'] = 'Exportar analytics';
+$string['videotrackermax:rebuild'] = 'Reconstruir agregação de analytics';

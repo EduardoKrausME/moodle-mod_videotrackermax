@@ -1,0 +1,29 @@
+{{!
+    @template mod_videotrackermax/view
+}}
+<div class="videotrackermax-view" data-region="videotrackermax" data-config="{{configjson}}">
+    <div class="d-flex justify-content-between align-items-start mb-3">
+        <div>
+            <h2>{{name}}</h2>
+            {{#hasintro}}<div class="mb-3">{{{intro}}}</div>{{/hasintro}}
+        </div>
+        {{#canviewanalytics}}
+            <a class="btn btn-primary" href="{{dashboardurl}}">{{#str}} dashboard, videotrackermax {{/str}}</a>
+        {{/canviewanalytics}}
+    </div>
+
+    <section class="videotrackermax-player" data-region="player">
+        {{{player.sourcehtml}}}
+    </section>
+
+    {{#showstudentprogress}}
+        <section class="card mt-3">
+            <div class="card-body">
+                <h3 class="h5">{{#str}} yourprogress, videotrackermax {{/str}}</h3>
+                <div class="progress" role="progressbar" aria-valuenow="{{studentpercent}}" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar" style="width: {{studentpercent}}%">{{studentpercent}}%</div>
+                </div>
+            </div>
+        </section>
+    {{/showstudentprogress}}
+</div>
