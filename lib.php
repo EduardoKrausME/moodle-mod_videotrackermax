@@ -48,15 +48,62 @@ function videotrackermax_update_instance(stdClass $data, ?mod_videotrackermax_mo
 
     $data->id = $data->instance;
     $data->timemodified = time();
-    $previoussource = $DB->get_field('videotrackermax', 'videosource', ['id' => $data->id], MUST_EXIST);
+    $previous = $DB->get_record(
+        'videotrackermax',
+        ['id' => $data->id],
+        'id,course,videosource,sourceconfig',
+        MUST_EXIST
+    );
+    $previoussource = (string)$previous->videosource;
+    $previoushash = analytics::media_hash(
+        (string)$previous->videosource,
+        (string)$previous->sourceconfig
+    );
 
     $manager = new source_manager();
     $manager->normalise_record($data);
+    $newhash = analytics::media_hash(
+        (string)$data->videosource,
+        (string)$data->sourceconfig
+    );
     $result = $DB->update_record('videotrackermax', $data);
 
+    $cm = null;
     if (!empty($data->coursemodule)) {
-        $context = context_module::instance($data->coursemodule);
+        $cm = get_coursemodule_from_id('videotrackermax', (int)$data->coursemodule, 0, false, IGNORE_MISSING);
+    }
+    if (!$cm) {
+        $cm = get_coursemodule_from_instance(
+            'videotrackermax',
+            (int)$data->id,
+            (int)$previous->course,
+            false,
+            IGNORE_MISSING
+        );
+    }
+
+    if ($cm) {
+        $context = context_module::instance($cm->id);
         $manager->save_files($data, $context, $previoussource);
+
+        if (!hash_equals($previoushash, $newhash)) {
+            // A different media identity must start with clean authoritative
+            // progress and clean materialized analytics. Bridge-owned data is
+            // deleted through its public API, never by touching bridge tables.
+            progress_manager::delete_consumer(
+                $context->id,
+                'mod_videotrackermax',
+                (int)$data->id
+            );
+            foreach ([
+                'videotrackermax_agg',
+                'videotrackermax_bucket',
+                'videotrackermax_user',
+                'videotrackermax_state',
+            ] as $table) {
+                $DB->delete_records($table, ['activityid' => $data->id]);
+            }
+        }
     }
 
     return $result;
@@ -72,11 +119,22 @@ function videotrackermax_delete_instance(int $id): bool {
 
     $cm = get_coursemodule_from_instance('videotrackermax', $id, $activity->course, false, IGNORE_MISSING);
     if ($cm) {
-        (new source_manager())->delete_files(context_module::instance($cm->id));
+        $context = context_module::instance($cm->id);
+        (new source_manager())->delete_files($context);
+        progress_manager::delete_consumer(
+            $context->id,
+            'mod_videotrackermax',
+            $id
+        );
     }
 
     $transaction = $DB->start_delegated_transaction();
-    foreach (['videotrackermax_agg', 'videotrackermax_bucket', 'videotrackermax_user', 'videotrackermax_state'] as $table) {
+    foreach ([
+        'videotrackermax_agg',
+        'videotrackermax_bucket',
+        'videotrackermax_user',
+        'videotrackermax_state',
+    ] as $table) {
         $DB->delete_records($table, ['activityid' => $id]);
     }
     $DB->delete_records('videotrackermax', ['id' => $id]);
