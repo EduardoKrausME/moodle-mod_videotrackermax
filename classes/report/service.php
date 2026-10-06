@@ -60,10 +60,9 @@ class service {
         [$where, $params] = $this->user_where($filters);
         $sql = "SELECT u.userid,
                        MAX(u.duration) AS duration,
-                       MAX(u.percent) AS percent,
                        SUM(u.watchtime) AS watchtime,
                        SUM(u.sessions) AS sessions,
-                       MAX(u.completed) AS completed,
+                       MAX(u.completed) AS reachedend,
                        AVG(u.speedavg) AS speedavg,
                        MIN(NULLIF(u.firststarted, 0)) AS firststarted,
                        MAX(u.lastended) AS lastended
@@ -72,6 +71,54 @@ class service {
               GROUP BY u.userid";
 
         $records = array_values($DB->get_records_sql($sql, $params));
+        if (!$records) {
+            return [];
+        }
+
+        // Daily percentages cannot be combined with MAX() or SUM(): a learner can
+        // watch different halves on different days. Rebuild period coverage from
+        // distinct materialized learner/bucket rows instead.
+        $userids = array_map(static fn($row): int => (int)$row->userid, $records);
+        $bucketwhere = [
+            'activityid = :bucketactivityid',
+            'mediahash = :bucketmediahash',
+            'watched = :bucketwatched',
+        ];
+        $bucketparams = [
+            'bucketactivityid' => (int)$this->activity->id,
+            'bucketmediahash' => \local_video_bridge\analytics::media_hash(
+                (string)$this->activity->videosource,
+                (string)$this->activity->sourceconfig
+            ),
+            'bucketwatched' => 1,
+        ];
+        $this->apply_dates($bucketwhere, $bucketparams, $filters, '');
+        [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'coverageuser');
+        $bucketwhere[] = 'userid ' . $insql;
+        $bucketparams += $inparams;
+
+        $coverage = $DB->get_records_sql(
+            "SELECT userid, COUNT(DISTINCT bucket) AS watchedbuckets
+               FROM {videotrackermax_bucket}
+              WHERE " . implode(' AND ', $bucketwhere) . "
+           GROUP BY userid",
+            $bucketparams
+        );
+
+        $bucketcount = max(1, (int)$this->activity->bucketcount);
+        $completionpercent = max(0, min(100, (int)$this->activity->completionpercent));
+        foreach ($records as $row) {
+            $watchedbuckets = isset($coverage[$row->userid])
+                ? (int)$coverage[$row->userid]->watchedbuckets
+                : 0;
+            $row->percent = (int)round(($watchedbuckets / $bucketcount) * 100);
+            $row->percent = max(0, min(100, $row->percent));
+            $row->reachedend = !empty($row->reachedend) ? 1 : 0;
+            $row->completed = $completionpercent > 0
+                ? ($row->percent >= $completionpercent ? 1 : 0)
+                : $row->reachedend;
+        }
+
         $status = clean_param((string)($filters['status'] ?? 'all'), PARAM_ALPHA);
         $minpercent = max(0, min(100, (int)($filters['minpercent'] ?? 0)));
         $maxpercent = max($minpercent, min(100, (int)($filters['maxpercent'] ?? 100)));
@@ -168,6 +215,7 @@ class service {
         $watchtimes = array_map(static fn($row): int => (int)$row->watchtime, $summaries);
         $sessions = array_map(static fn($row): int => (int)$row->sessions, $summaries);
         $completed = count(array_filter($summaries, static fn($row): bool => !empty($row->completed)));
+        $reachedend = count(array_filter($summaries, static fn($row): bool => !empty($row->reachedend)));
         $duration = $summaries ? max(array_map(static fn($row): int => (int)$row->duration, $summaries)) : 0;
 
         $metric = [
@@ -182,7 +230,7 @@ class service {
             'averagespeed' => $count
                 ? array_sum(array_map(static fn($row): float => (float)$row->speedavg, $summaries)) / $count
                 : 1.0,
-            'endpercent' => $count ? ($completed / $count) * 100 : 0,
+            'endpercent' => $count ? ($reachedend / $count) * 100 : 0,
             'duration' => $duration,
             'heatmap' => $heatmap,
         ];

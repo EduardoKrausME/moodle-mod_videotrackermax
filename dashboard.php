@@ -486,7 +486,7 @@ if ($section === 'overview') {
         $users = $DB->get_records_list('user', 'id', $userids, '', 'id,firstname,lastname,email,picture,imagealt');
         $table = new html_table();
         $table->head = [
-            get_string('fullnameuser'),
+            get_string('fullname', 'videotrackermax'),
             get_string('email'),
             get_string('watchedpercent', 'videotrackermax'),
             get_string('watchtime', 'videotrackermax'),

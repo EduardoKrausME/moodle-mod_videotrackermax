@@ -82,6 +82,7 @@ $string['population'] = 'População';
 $string['watchedpercent'] = 'Percentual assistido';
 $string['watchtime'] = 'Tempo assistido';
 $string['sessions'] = 'Sessões';
+$string['fullname'] = 'Nome completo';
 $string['privacy:metadata'] = 'O Video Tracker Max materializa analytics compactos por aluno e dia derivados da telemetria do Video Bridge.';
 $string['privacy:metadata:user'] = 'Resumo materializado por aluno e dia.';
 $string['privacy:metadata:user:userid'] = 'O aluno representado pelo resumo.';

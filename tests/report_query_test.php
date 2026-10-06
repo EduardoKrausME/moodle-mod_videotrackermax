@@ -108,6 +108,13 @@ final class report_query_test extends \advanced_testcase {
         $heatmap = $report->heatmap($filters, $summaries);
 
         $this->assertCount(2, $summaries);
+        // The daily stored percentage must not leak into the period result.
+        // Only bucket 0 was watched, so period coverage is 10%, not MAX(50, 80).
+        $byuser = [];
+        foreach ($summaries as $summary) {
+            $byuser[(int)$summary->userid] = $summary;
+        }
+        $this->assertSame(10, (int)$byuser[$u1->id]->percent);
         $this->assertSame(2, $heatmap[0]['viewers']);
         $this->assertSame(3, $heatmap[0]['plays']);
     }
