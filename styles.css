@@ -1,0 +1,46 @@
+.videotrackermax-player {
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.videotrackermax-dashboard .metric-card {
+    min-height: 118px;
+}
+
+.videotrackermax-dashboard .metric-value {
+    font-size: 1.65rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.videotrackermax-heatmap {
+    display: flex;
+    width: 100%;
+    min-height: 64px;
+    overflow: hidden;
+    border-radius: .5rem;
+    background: var(--bs-tertiary-bg, #f1f3f5);
+}
+
+.videotrackermax-heatmap__bucket {
+    flex: 1 1 0;
+    min-width: 1px;
+    background: rgba(13, 110, 253, var(--vtm-intensity));
+    transition: transform .1s ease;
+}
+
+.videotrackermax-heatmap__bucket:hover {
+    transform: scaleY(1.08);
+    z-index: 1;
+}
+
+.videotrackermax-filterbar {
+    background: var(--bs-tertiary-bg, #f8f9fa);
+    border-radius: .75rem;
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.videotrackermax-suppressed {
+    border-left: 4px solid var(--bs-warning, #ffc107);
+}
