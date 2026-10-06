@@ -301,6 +301,23 @@ class service {
         return $result;
     }
 
+    public function period_comparison(array $filters, array $a, array $b): array {
+        $result = [];
+        foreach (['a' => $a, 'b' => $b] as $key => $period) {
+            $copy = $filters;
+            $copy['from'] = max(0, (int)($period['from'] ?? 0));
+            $copy['to'] = max(0, (int)($period['to'] ?? 0));
+            $metrics = $this->metrics($copy);
+            $result[$key] = [
+                'id' => 0,
+                'label' => (string)($period['label'] ?? ''),
+                'metrics' => $metrics,
+                'retention' => $metrics['suppressed'] ? [] : $this->retention($copy),
+            ];
+        }
+        return $result;
+    }
+
     public function dimension_options(string $type): array {
         if ($type === 'group') {
             $options = $this->group_options();
