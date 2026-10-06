@@ -15,6 +15,7 @@ final class aggregation_test extends \advanced_testcase {
                 'startedat' => 1000,
                 'endedat' => 1040,
                 'maxposition' => 40,
+                'reachedend' => 0,
             ],
             (object)[
                 'duration' => 100,
@@ -23,6 +24,7 @@ final class aggregation_test extends \advanced_testcase {
                 'startedat' => 2000,
                 'endedat' => 2050,
                 'maxposition' => 100,
+                'reachedend' => 1,
             ],
         ];
         $coverage = [
@@ -46,4 +48,38 @@ final class aggregation_test extends \advanced_testcase {
         $this->assertGreaterThan(1.2, $summary['speedavg']);
         $this->assertLessThan(1.3, $summary['speedavg']);
     }
+
+    public function test_max_position_without_ended_signal_is_not_reached_end(): void {
+        $sessions = [
+            (object)[
+                'duration' => 100,
+                'watchtime' => 10,
+                'speedavg' => 1.0,
+                'startedat' => 1000,
+                'endedat' => 1010,
+                'maxposition' => 100,
+                'reachedend' => 0,
+            ],
+        ];
+        $coverage = [
+            'duration' => 100,
+            'buckets' => [
+                [
+                    'bucket' => 0,
+                    'viewers' => 1,
+                    'plays' => 1,
+                    'replays' => 0,
+                    'pauses' => 0,
+                    'skips' => 1,
+                    'dropoffs' => 1,
+                ],
+            ],
+        ];
+
+        $summary = calculator::summarise($sessions, $coverage, 1);
+
+        $this->assertSame(100, $summary['percent']);
+        $this->assertSame(0, $summary['completed']);
+    }
+
 }
