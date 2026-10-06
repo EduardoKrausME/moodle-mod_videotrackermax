@@ -7,5 +7,5 @@ $plugin->release = '1.0.0';
 $plugin->requires = 2024100700;
 $plugin->maturity = MATURITY_ALPHA;
 $plugin->dependencies = [
-    'local_video_bridge' => 2026100601,
+    'local_video_bridge' => 2026100606,
 ];
