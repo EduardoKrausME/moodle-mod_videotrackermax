@@ -50,6 +50,12 @@ final class report_query_test extends \advanced_testcase {
 
         $u1 = $this->getDataGenerator()->create_user();
         $u2 = $this->getDataGenerator()->create_user();
+        $u3 = $this->getDataGenerator()->create_user();
+        $studentrole = $DB->get_record('role', ['shortname' => 'student'], '*', MUST_EXIST);
+        $this->getDataGenerator()->enrol_user($u1->id, $course->id, $studentrole->id);
+        $this->getDataGenerator()->enrol_user($u2->id, $course->id, $studentrole->id);
+        $this->getDataGenerator()->enrol_user($u3->id, $course->id, $studentrole->id);
+
         $mediahash = \local_video_bridge\analytics::media_hash('test', '{}');
         $day1 = \mod_videotrackermax\aggregation\calculator::day_start(time() - DAYSECS);
         $day2 = \mod_videotrackermax\aggregation\calculator::day_start(time());
@@ -107,7 +113,7 @@ final class report_query_test extends \advanced_testcase {
         $summaries = $report->user_summaries($filters);
         $heatmap = $report->heatmap($filters, $summaries);
 
-        $this->assertCount(2, $summaries);
+        $this->assertCount(3, $summaries);
         // The daily stored percentage must not leak into the period result.
         // Only bucket 0 was watched, so period coverage is 10%, not MAX(50, 80).
         $byuser = [];
@@ -115,8 +121,14 @@ final class report_query_test extends \advanced_testcase {
             $byuser[(int)$summary->userid] = $summary;
         }
         $this->assertSame(10, (int)$byuser[$u1->id]->percent);
+        $this->assertSame(0, (int)$byuser[$u3->id]->percent);
+        $this->assertSame(0, (int)$byuser[$u3->id]->sessions);
         $this->assertSame(2, $heatmap[0]['viewers']);
         $this->assertSame(3, $heatmap[0]['plays']);
+
+        $metrics = $report->metrics($filters);
+        $this->assertSame(3, $metrics['population']);
+        $this->assertSame(2, $metrics['started']);
     }
 
     public function test_median_handles_even_and_odd_populations(): void {
