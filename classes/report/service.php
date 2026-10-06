@@ -16,7 +16,8 @@ class service {
         $this->activity = $activity;
         $this->cm = $cm;
         $this->context = $context;
-        $this->minimum = max(1, (int)get_config('videotrackermax', 'minaggregateusers'));
+        $configuredminimum = get_config('videotrackermax', 'minaggregateusers');
+        $this->minimum = max(1, $configuredminimum === false ? 5 : (int)$configuredminimum);
     }
 
     public function minimum_population(): int {
