@@ -6,6 +6,9 @@ use local_video_bridge\analytics;
 use stdClass;
 
 class service {
+    private const BATCH_SIZE = 500;
+    private const MAX_CRON_BATCHES = 4;
+
     public function process_all(): void {
         global $DB;
 
@@ -43,38 +46,58 @@ class service {
         ]);
 
         $cursor = $force ? 0 : (int)($state->lastprocessed ?? 0);
-        $modified = analytics::get_session_metrics(
-            $context->id,
-            'mod_videotrackermax',
-            (int)$activity->id,
-            $mediahash,
-            null,
-            ['modifiedfrom' => max(0, $cursor - 2)]
-        );
+        $cursorid = $force ? 0 : (int)($state->lastsessionid ?? 0);
+        $batch = 0;
 
-        if (!$modified) {
-            if (!$state) {
-                $this->save_state((int)$activity->id, $mediahash, $cursor);
+        do {
+            $modified = analytics::get_session_metrics(
+                $context->id,
+                'mod_videotrackermax',
+                (int)$activity->id,
+                $mediahash,
+                null,
+                [
+                    'modifiedafter' => $cursor,
+                    'modifiedafterid' => $cursorid,
+                    'limit' => self::BATCH_SIZE,
+                ]
+            );
+
+            if (!$modified) {
+                if (!$state) {
+                    $this->save_state((int)$activity->id, $mediahash, $cursor, $cursorid);
+                }
+                break;
             }
-            return;
-        }
 
-        $affected = [];
-        $maxmodified = $cursor;
-        foreach ($modified as $session) {
-            $day = calculator::day_start((int)$session->startedat);
-            $affected[$day][(int)$session->userid] = true;
-            $maxmodified = max($maxmodified, (int)$session->timemodified);
-        }
+            $affected = [];
+            foreach ($modified as $session) {
+                $day = calculator::day_start((int)$session->startedat);
+                $affected[$day][(int)$session->userid] = true;
 
-        foreach ($affected as $day => $users) {
-            foreach (array_keys($users) as $userid) {
-                $this->rebuild_user_day($activity, $context, $mediahash, (int)$day, (int)$userid);
+                // Bridge guarantees this ordering when modifiedafter is used.
+                $cursor = (int)$session->timemodified;
+                $cursorid = (int)$session->id;
             }
-            $this->rebuild_day_groups($activity, $mediahash, (int)$day);
-        }
 
-        $this->save_state((int)$activity->id, $mediahash, $maxmodified);
+            foreach ($affected as $day => $users) {
+                foreach (array_keys($users) as $userid) {
+                    $this->rebuild_user_day($activity, $context, $mediahash, (int)$day, (int)$userid);
+                }
+                $this->rebuild_day_groups($activity, $mediahash, (int)$day);
+            }
+
+            // Advance only after every materialized row in the batch was rebuilt.
+            $this->save_state((int)$activity->id, $mediahash, $cursor, $cursorid);
+            $state = true;
+            $batch++;
+
+            // Normal cron work is deliberately bounded. Administrative rebuilds
+            // keep consuming batches until the public bridge API is exhausted.
+            if (!$force && $batch >= self::MAX_CRON_BATCHES) {
+                break;
+            }
+        } while (count($modified) === self::BATCH_SIZE);
     }
 
     private function rebuild_user_day(
@@ -251,13 +274,19 @@ class service {
         }
     }
 
-    private function save_state(int $activityid, string $mediahash, int $cursor): void {
+    private function save_state(
+        int $activityid,
+        string $mediahash,
+        int $cursor,
+        int $cursorid
+    ): void {
         global $DB;
 
         $params = ['activityid' => $activityid, 'mediahash' => $mediahash];
         $record = $DB->get_record('videotrackermax_state', $params);
         $values = (object)($params + [
             'lastprocessed' => $cursor,
+            'lastsessionid' => $cursorid,
             'timemodified' => time(),
         ]);
         if ($record) {
