@@ -58,7 +58,7 @@ class service {
     public function user_summaries(array $filters): array {
         global $DB;
 
-        [$where, $params] = $this->user_where($filters);
+        [$where, $params, $population] = $this->user_where($filters);
         $sql = "SELECT u.userid,
                        MAX(u.duration) AS duration,
                        SUM(u.watchtime) AS watchtime,
@@ -72,6 +72,30 @@ class service {
               GROUP BY u.userid";
 
         $records = array_values($DB->get_records_sql($sql, $params));
+
+        // The collective denominator is the selected participant population, not
+        // only learners who already generated telemetry. Non-starters are
+        // represented as zero-value report rows without persisting fake analytics.
+        $byuserid = [];
+        foreach ($records as $row) {
+            $byuserid[(int)$row->userid] = $row;
+        }
+        foreach ($population as $userid) {
+            if (isset($byuserid[$userid])) {
+                continue;
+            }
+            $byuserid[$userid] = (object)[
+                'userid' => $userid,
+                'duration' => 0,
+                'watchtime' => 0,
+                'sessions' => 0,
+                'reachedend' => 0,
+                'speedavg' => 1.0,
+                'firststarted' => 0,
+                'lastended' => 0,
+            ];
+        }
+        $records = array_values($byuserid);
         if (!$records) {
             return [];
         }
@@ -231,24 +255,32 @@ class service {
         $summaries = $this->user_summaries($filters);
         $heatmap = $this->heatmap($filters, $summaries);
         $count = count($summaries);
+        $startedrows = array_values(array_filter(
+            $summaries,
+            static fn($row): bool => (int)$row->sessions > 0
+        ));
+        $started = count($startedrows);
         $percents = array_map(static fn($row): int => (int)$row->percent, $summaries);
-        $watchtimes = array_map(static fn($row): int => (int)$row->watchtime, $summaries);
-        $sessions = array_map(static fn($row): int => (int)$row->sessions, $summaries);
+        $watchtimes = array_map(static fn($row): int => (int)$row->watchtime, $startedrows);
+        $sessions = array_map(static fn($row): int => (int)$row->sessions, $startedrows);
         $completed = count(array_filter($summaries, static fn($row): bool => !empty($row->completed)));
         $reachedend = count(array_filter($summaries, static fn($row): bool => !empty($row->reachedend)));
         $duration = $summaries ? max(array_map(static fn($row): int => (int)$row->duration, $summaries)) : 0;
 
         $metric = [
             'population' => $count,
-            'suppressed' => $count > 0 && $count < $this->minimum,
-            'started' => $count,
+            'suppressed' => $count > 0 && (
+                $count < $this->minimum ||
+                ($started > 0 && $started < $this->minimum)
+            ),
+            'started' => $started,
             'completed' => $completed,
             'averagepercent' => $count ? array_sum($percents) / $count : 0,
             'medianpercent' => self::median($percents),
-            'averagewatchtime' => $count ? array_sum($watchtimes) / $count : 0,
-            'averagesessions' => $count ? array_sum($sessions) / $count : 0,
-            'averagespeed' => $count
-                ? array_sum(array_map(static fn($row): float => (float)$row->speedavg, $summaries)) / $count
+            'averagewatchtime' => $started ? array_sum($watchtimes) / $started : 0,
+            'averagesessions' => $started ? array_sum($sessions) / $started : 0,
+            'averagespeed' => $started
+                ? array_sum(array_map(static fn($row): float => (float)$row->speedavg, $startedrows)) / $started
                 : 1.0,
             'endpercent' => $count ? ($reachedend / $count) * 100 : 0,
             'duration' => $duration,
@@ -390,13 +422,24 @@ class service {
                 $params += $inparams;
             }
         }
-        return [$where, $params];
+        return [$where, $params, $population ?? []];
     }
 
     private function population_userids(array $filters): ?array {
         global $DB, $USER;
 
-        $population = null;
+        $enrolled = get_enrolled_users(
+            $this->context,
+            'mod/videotrackermax:participate',
+            0,
+            'u.id',
+            null,
+            0,
+            0,
+            true
+        );
+        $population = array_map('intval', array_keys($enrolled));
+
         $groupmode = groups_get_activity_groupmode($this->cm);
         if ($groupmode == SEPARATEGROUPS && !has_capability('moodle/site:accessallgroups', $this->context)) {
             $own = groups_get_all_groups((int)$this->activity->course, (int)$USER->id, (int)$this->cm->groupingid);
