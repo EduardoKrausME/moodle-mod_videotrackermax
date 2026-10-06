@@ -108,6 +108,22 @@ class service {
 
         $bucketcount = max(1, (int)$this->activity->bucketcount);
         $completionpercent = max(0, min(100, (int)$this->activity->completionpercent));
+        $mediahash = \local_video_bridge\analytics::media_hash(
+            (string)$this->activity->videosource,
+            (string)$this->activity->sourceconfig
+        );
+        $progressrows = \local_video_bridge\progress\manager::get_activity_progress(
+            $this->context->id,
+            'mod_videotrackermax',
+            (int)$this->activity->id,
+            $mediahash,
+            $userids
+        );
+        $progressbyuser = [];
+        foreach ($progressrows as $progress) {
+            $progressbyuser[(int)$progress->userid] = $progress;
+        }
+
         foreach ($records as $row) {
             $watchedbuckets = isset($coverage[$row->userid])
                 ? (int)$coverage[$row->userid]->watchedbuckets
@@ -115,8 +131,11 @@ class service {
             $row->percent = (int)round(($watchedbuckets / $bucketcount) * 100);
             $row->percent = max(0, min(100, $row->percent));
             $row->reachedend = !empty($row->reachedend) ? 1 : 0;
+            $row->authoritativepercent = isset($progressbyuser[$row->userid])
+                ? (int)$progressbyuser[$row->userid]->percent
+                : 0;
             $row->completed = $completionpercent > 0
-                ? ($row->percent >= $completionpercent ? 1 : 0)
+                ? ($row->authoritativepercent >= $completionpercent ? 1 : 0)
                 : $row->reachedend;
         }
 
