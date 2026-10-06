@@ -369,52 +369,112 @@ if ($section === 'overview') {
     echo html_writer::div(get_string('correlationwarning', 'videotrackermax'), 'alert alert-info mt-4');
 } else if ($section === 'comparison') {
     $type = optional_param('comparetype', 'group', PARAM_ALPHA);
-    if (!in_array($type, ['group', 'grouping', 'cohort'], true)) {
+    if (!in_array($type, ['group', 'grouping', 'cohort', 'period'], true)) {
         $type = 'group';
     }
-    $options = $report->dimension_options($type);
-    $ids = array_keys($options);
-    $a = optional_param('comparea', $ids[0] ?? 0, PARAM_INT);
-    $b = optional_param('compareb', $ids[1] ?? ($ids[0] ?? 0), PARAM_INT);
 
     $compareform = html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]) .
         html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'section', 'value' => 'comparison']);
     foreach ($filterparams as $name => $value) {
         $compareform .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => $name, 'value' => $value]);
     }
-    $compareform .= html_writer::div(
-        html_writer::tag('label',
-            get_string('comparetype', 'videotrackermax') .
-            html_writer::select([
-                'group' => get_string('groups'),
-                'grouping' => get_string('groupings', 'group'),
-                'cohort' => get_string('cohorts', 'cohort'),
-            ], 'comparetype', $type, false, ['class' => 'form-select mt-1']),
-            ['class' => 'form-label col']
-        ) .
-        html_writer::tag('label',
+
+    $typefield = html_writer::tag('label',
+        get_string('comparetype', 'videotrackermax') .
+        html_writer::select([
+            'group' => get_string('groups'),
+            'grouping' => get_string('groupings', 'group'),
+            'cohort' => get_string('cohorts', 'cohort'),
+            'period' => get_string('dateperiods', 'videotrackermax'),
+        ], 'comparetype', $type, false, ['class' => 'form-select mt-1']),
+        ['class' => 'form-label col-12 col-md']
+    );
+
+    $comparison = null;
+    $fields = $typefield;
+
+    if ($type === 'period') {
+        $periodafrom = optional_param('periodafrom', '', PARAM_RAW_TRIMMED);
+        $periodato = optional_param('periodato', '', PARAM_RAW_TRIMMED);
+        $periodbfrom = optional_param('periodbfrom', '', PARAM_RAW_TRIMMED);
+        $periodbto = optional_param('periodbto', '', PARAM_RAW_TRIMMED);
+
+        foreach ([
+            ['periodafrom', get_string('periodafrom', 'videotrackermax'), $periodafrom],
+            ['periodato', get_string('periodato', 'videotrackermax'), $periodato],
+            ['periodbfrom', get_string('periodbfrom', 'videotrackermax'), $periodbfrom],
+            ['periodbto', get_string('periodbto', 'videotrackermax'), $periodbto],
+        ] as [$name, $label, $value]) {
+            $fields .= html_writer::tag('label',
+                $label . html_writer::empty_tag('input', [
+                    'type' => 'date',
+                    'name' => $name,
+                    'value' => $value,
+                    'class' => 'form-control mt-1',
+                ]),
+                ['class' => 'form-label col-12 col-md']
+            );
+        }
+
+        $afrom = filters::parse_date_value($periodafrom);
+        $ato = filters::parse_date_value($periodato, true);
+        $bfrom = filters::parse_date_value($periodbfrom);
+        $bto = filters::parse_date_value($periodbto, true);
+
+        if ($afrom && $ato && $bfrom && $bto && $afrom <= $ato && $bfrom <= $bto) {
+            $comparison = $report->period_comparison(
+                $filters,
+                [
+                    'from' => $afrom,
+                    'to' => $ato,
+                    'label' => $periodafrom . ' — ' . $periodato,
+                ],
+                [
+                    'from' => $bfrom,
+                    'to' => $bto,
+                    'label' => $periodbfrom . ' — ' . $periodbto,
+                ]
+            );
+        }
+    } else {
+        $options = $report->dimension_options($type);
+        $ids = array_keys($options);
+        $a = optional_param('comparea', $ids[0] ?? 0, PARAM_INT);
+        $b = optional_param('compareb', $ids[1] ?? ($ids[0] ?? 0), PARAM_INT);
+
+        $fields .= html_writer::tag('label',
             get_string('comparefirst', 'videotrackermax') .
             html_writer::select($options, 'comparea', $a, false, ['class' => 'form-select mt-1']),
-            ['class' => 'form-label col']
-        ) .
-        html_writer::tag('label',
+            ['class' => 'form-label col-12 col-md']
+        );
+        $fields .= html_writer::tag('label',
             get_string('comparesecond', 'videotrackermax') .
             html_writer::select($options, 'compareb', $b, false, ['class' => 'form-select mt-1']),
-            ['class' => 'form-label col']
-        ) .
-        html_writer::div(html_writer::empty_tag('input', [
-            'type' => 'submit',
-            'class' => 'btn btn-secondary',
-            'value' => get_string('compare', 'videotrackermax'),
-        ]), 'col-auto'),
-        'row g-2 align-items-end mb-3'
-    );
+            ['class' => 'form-label col-12 col-md']
+        );
+
+        if ($options && $a && $b && isset($options[$a], $options[$b])) {
+            $comparison = $report->comparison($filters, $type, $a, $b);
+        }
+    }
+
+    $fields .= html_writer::div(html_writer::empty_tag('input', [
+        'type' => 'submit',
+        'class' => 'btn btn-secondary',
+        'value' => get_string('compare', 'videotrackermax'),
+    ]), 'col-auto');
+
+    $compareform .= html_writer::div($fields, 'row g-2 align-items-end mb-3');
     echo html_writer::tag('form', $compareform, ['method' => 'get']);
 
-    if (!$options || !$a || !$b || !isset($options[$a], $options[$b])) {
-        echo $OUTPUT->notification(get_string('comparisonunavailable', 'videotrackermax'), 'info');
+    if ($comparison === null) {
+        echo $OUTPUT->notification(
+            $type === 'period'
+                ? get_string('comparisonperiodhelp', 'videotrackermax')
+                : get_string('comparisonunavailable', 'videotrackermax'),
+            'info'
+        );
     } else {
-        $comparison = $report->comparison($filters, $type, $a, $b);
         $suppressed = $comparison['a']['metrics']['suppressed'] || $comparison['b']['metrics']['suppressed'];
         if ($suppressed) {
             echo html_writer::div(
@@ -501,7 +561,10 @@ if ($section === 'overview') {
             }
             $table->data[] = [
                 html_writer::link(
-                    new moodle_url('/user/view.php', ['id' => $user->id, 'course' => $course->id]),
+                    new moodle_url('/mod/videotrackermax/student.php', [
+                        'id' => $cm->id,
+                        'userid' => $user->id,
+                    ] + $filterparams),
                     fullname($user)
                 ),
                 s($user->email),
