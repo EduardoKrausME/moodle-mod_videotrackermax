@@ -29,7 +29,7 @@ The scheduled aggregation task incrementally materializes:
 - one learner/day summary;
 - per-learner/day heatmap buckets;
 - per-day/per-group aggregate buckets;
-- a stable `(timemodified, sessionid)` cursor per activity/media hash.
+- a stable `(timemodified, id)` cursor per activity/media hash.
 
 Normal cron runs consume bounded batches of compact sessions, while an administrative rebuild keeps paging through the public bridge API until the activity is consolidated. Opening a dashboard therefore queries compact materialized data instead of raw playback events.
 
