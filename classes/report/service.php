@@ -118,17 +118,26 @@ class service {
             'bucketwatched' => 1,
         ];
         $this->apply_dates($bucketwhere, $bucketparams, $filters, '');
-        [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'coverageuser');
-        $bucketwhere[] = 'userid ' . $insql;
-        $bucketparams += $inparams;
 
-        $coverage = $DB->get_records_sql(
-            "SELECT userid, COUNT(DISTINCT bucket) AS watchedbuckets
-               FROM {videotrackermax_bucket}
-              WHERE " . implode(' AND ', $bucketwhere) . "
-           GROUP BY userid",
-            $bucketparams
-        );
+        $coverage = [];
+        foreach (array_chunk($userids, 500) as $chunkindex => $chunk) {
+            [$insql, $inparams] = $DB->get_in_or_equal(
+                $chunk,
+                SQL_PARAMS_NAMED,
+                'coverageuser' . $chunkindex
+            );
+            $chunkwhere = $bucketwhere;
+            $chunkwhere[] = 'userid ' . $insql;
+            foreach ($DB->get_records_sql(
+                "SELECT userid, COUNT(DISTINCT bucket) AS watchedbuckets
+                   FROM {videotrackermax_bucket}
+                  WHERE " . implode(' AND ', $chunkwhere) . "
+               GROUP BY userid",
+                $bucketparams + $inparams
+            ) as $userid => $row) {
+                $coverage[(int)$userid] = $row;
+            }
+        }
 
         $bucketcount = max(1, (int)$this->activity->bucketcount);
         $completionpercent = max(0, min(100, (int)$this->activity->completionpercent));
@@ -215,36 +224,45 @@ class service {
             ),
         ];
         $this->apply_dates($where, $params, $filters, '');
-        [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'heatuser');
-        $where[] = 'userid ' . $insql;
-        $params += $inparams;
 
-        $sql = "SELECT x.bucket,
-                       SUM(x.watched) AS viewers,
-                       SUM(x.plays) AS plays,
-                       SUM(x.replays) AS replays,
-                       SUM(x.pauses) AS pauses,
-                       SUM(x.skips) AS skips,
-                       SUM(x.dropoffs) AS dropoffs
-                  FROM (
-                        SELECT userid, bucket,
-                               MAX(watched) AS watched,
-                               SUM(plays) AS plays,
-                               SUM(replays) AS replays,
-                               SUM(pauses) AS pauses,
-                               SUM(skips) AS skips,
-                               SUM(dropoffs) AS dropoffs
-                          FROM {videotrackermax_bucket}
-                         WHERE " . implode(' AND ', $where) . "
-                      GROUP BY userid, bucket
-                  ) x
-              GROUP BY x.bucket
-              ORDER BY x.bucket";
-        foreach ($DB->get_records_sql($sql, $params) as $row) {
-            $bucket = (int)$row->bucket;
-            if (isset($empty[$bucket])) {
+        foreach (array_chunk($userids, 500) as $chunkindex => $chunk) {
+            [$insql, $inparams] = $DB->get_in_or_equal(
+                $chunk,
+                SQL_PARAMS_NAMED,
+                'heatuser' . $chunkindex
+            );
+            $chunkwhere = $where;
+            $chunkwhere[] = 'userid ' . $insql;
+
+            $sql = "SELECT x.bucket,
+                           SUM(x.watched) AS viewers,
+                           SUM(x.plays) AS plays,
+                           SUM(x.replays) AS replays,
+                           SUM(x.pauses) AS pauses,
+                           SUM(x.skips) AS skips,
+                           SUM(x.dropoffs) AS dropoffs
+                      FROM (
+                            SELECT userid, bucket,
+                                   MAX(watched) AS watched,
+                                   SUM(plays) AS plays,
+                                   SUM(replays) AS replays,
+                                   SUM(pauses) AS pauses,
+                                   SUM(skips) AS skips,
+                                   SUM(dropoffs) AS dropoffs
+                              FROM {videotrackermax_bucket}
+                             WHERE " . implode(' AND ', $chunkwhere) . "
+                          GROUP BY userid, bucket
+                      ) x
+                  GROUP BY x.bucket
+                  ORDER BY x.bucket";
+
+            foreach ($DB->get_records_sql($sql, $params + $inparams) as $row) {
+                $bucket = (int)$row->bucket;
+                if (!isset($empty[$bucket])) {
+                    continue;
+                }
                 foreach (['viewers', 'plays', 'replays', 'pauses', 'skips', 'dropoffs'] as $field) {
-                    $empty[$bucket][$field] = (int)$row->{$field};
+                    $empty[$bucket][$field] += (int)$row->{$field};
                 }
             }
         }
@@ -397,7 +415,7 @@ class service {
     }
 
     private function user_where(array $filters): array {
-        global $DB;
+        global $DB, $USER;
 
         $where = [
             'u.activityid = :activityid',
@@ -413,16 +431,82 @@ class service {
         $this->apply_dates($where, $params, $filters, 'u.');
 
         $population = $this->population_userids($filters);
-        if ($population !== null) {
-            if (!$population) {
-                $where[] = '1 = 0';
-            } else {
-                [$insql, $inparams] = $DB->get_in_or_equal($population, SQL_PARAMS_NAMED, 'population');
-                $where[] = 'u.userid ' . $insql;
-                $params += $inparams;
-            }
+        if (!$population) {
+            $where[] = '1 = 0';
+            return [$where, $params, []];
         }
-        return [$where, $params, $population ?? []];
+
+        [$enrolledsql, $enrolledparams] = get_enrolled_sql(
+            $this->context,
+            'mod/videotrackermax:participate',
+            0,
+            true
+        );
+        $where[] = 'u.userid IN (' . $enrolledsql . ')';
+        $params += $enrolledparams;
+
+        $groupmode = groups_get_activity_groupmode($this->cm);
+        if ($groupmode == SEPARATEGROUPS && !has_capability('moodle/site:accessallgroups', $this->context)) {
+            $own = groups_get_all_groups(
+                (int)$this->activity->course,
+                (int)$USER->id,
+                (int)$this->cm->groupingid
+            );
+            $this->add_group_sql_scope($where, $params, array_keys($own), 'ownscope');
+        }
+
+        $groupid = max(0, (int)($filters['groupid'] ?? 0));
+        if ($groupid) {
+            $this->add_group_sql_scope($where, $params, [$groupid], 'groupscope');
+        }
+
+        $groupingid = max(0, (int)($filters['groupingid'] ?? 0));
+        if ($groupingid) {
+            $groups = groups_get_all_groups((int)$this->activity->course, 0, $groupingid);
+            $allowedgroups = array_intersect_key($groups, $this->visible_groups());
+            $this->add_group_sql_scope($where, $params, array_keys($allowedgroups), 'groupingscope');
+        }
+
+        $cohortid = max(0, (int)($filters['cohortid'] ?? 0));
+        if ($cohortid) {
+            $where[] = "EXISTS (
+                SELECT 1
+                  FROM {cohort_members} vtmcohort
+                 WHERE vtmcohort.userid = u.userid
+                   AND vtmcohort.cohortid = :reportcohortid
+            )";
+            $params['reportcohortid'] = $cohortid;
+        }
+
+        return [$where, $params, $population];
+    }
+
+    private function add_group_sql_scope(
+        array &$where,
+        array &$params,
+        array $groupids,
+        string $prefix
+    ): void {
+        global $DB;
+
+        $groupids = array_values(array_unique(array_filter(array_map('intval', $groupids))));
+        if (!$groupids) {
+            $where[] = '1 = 0';
+            return;
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal(
+            $groupids,
+            SQL_PARAMS_NAMED,
+            $prefix
+        );
+        $where[] = "EXISTS (
+            SELECT 1
+              FROM {groups_members} vtmgm
+             WHERE vtmgm.userid = u.userid
+               AND vtmgm.groupid {$insql}
+        )";
+        $params += $inparams;
     }
 
     private function population_userids(array $filters): ?array {
