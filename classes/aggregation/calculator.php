@@ -9,7 +9,7 @@ class calculator {
     }
 
     public static function summarise(array $sessions, array $coverage, int $bucketcount): array {
-        $bucketcount = max(10, min(1000, $bucketcount));
+        $bucketcount = max(1, min(1000, $bucketcount));
         $duration = (int)($coverage['duration'] ?? 0);
         $watchtime = 0;
         $speedweight = 0.0;
@@ -26,8 +26,13 @@ class calculator {
                 : min($firststarted, (int)$session->startedat);
             $lastended = max($lastended, (int)$session->endedat, (int)$session->startedat);
             $duration = max($duration, (int)$session->duration);
-            if ((int)$session->duration > 0 &&
+            if (!empty($session->reachedend)) {
+                $completed = true;
+            } else if (!property_exists($session, 'reachedend') &&
+                    (int)$session->duration > 0 &&
                     (int)$session->maxposition >= max(0, (int)$session->duration - 2)) {
+                // Compatibility only for bridge versions that predate the
+                // normalized reachedend session property.
                 $completed = true;
             }
         }
