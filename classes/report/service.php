@@ -179,6 +179,9 @@ class service {
             'medianpercent' => self::median($percents),
             'averagewatchtime' => $count ? array_sum($watchtimes) / $count : 0,
             'averagesessions' => $count ? array_sum($sessions) / $count : 0,
+            'averagespeed' => $count
+                ? array_sum(array_map(static fn($row): float => (float)$row->speedavg, $summaries)) / $count
+                : 1.0,
             'endpercent' => $count ? ($completed / $count) * 100 : 0,
             'duration' => $duration,
             'heatmap' => $heatmap,
