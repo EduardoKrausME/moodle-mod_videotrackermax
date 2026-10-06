@@ -542,8 +542,19 @@ if ($section === 'overview') {
     if (!$summaries) {
         echo $OUTPUT->notification(get_string('nodata', 'videotrackermax'), 'info');
     } else {
-        $userids = array_map(static fn($row): int => (int)$row->userid, $summaries);
-        $users = $DB->get_records_list('user', 'id', $userids, '', 'id,firstname,lastname,email,picture,imagealt');
+        $page = max(0, optional_param('page', 0, PARAM_INT));
+        $perpage = 100;
+        $total = count($summaries);
+        $pagesummaries = array_slice($summaries, $page * $perpage, $perpage);
+        $userids = array_map(static fn($row): int => (int)$row->userid, $pagesummaries);
+        $users = $DB->get_records_list(
+            'user',
+            'id',
+            $userids,
+            '',
+            'id,firstname,lastname,email,picture,imagealt'
+        );
+
         $table = new html_table();
         $table->head = [
             get_string('fullname', 'videotrackermax'),
@@ -554,7 +565,7 @@ if ($section === 'overview') {
             get_string('averagespeed', 'videotrackermax'),
             get_string('completionstatus', 'videotrackermax'),
         ];
-        foreach ($summaries as $summary) {
+        foreach ($pagesummaries as $summary) {
             $user = $users[$summary->userid] ?? null;
             if (!$user) {
                 continue;
@@ -578,6 +589,14 @@ if ($section === 'overview') {
             ];
         }
         echo html_writer::table($table);
+
+        if ($total > $perpage) {
+            $pagingurl = new moodle_url(
+                '/mod/videotrackermax/dashboard.php',
+                ['id' => $cm->id, 'section' => 'students'] + $filterparams
+            );
+            echo $OUTPUT->paging_bar($total, $page, $perpage, $pagingurl);
+        }
     }
 }
 
