@@ -1,13 +1,53 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * calculator.php
+ *
+ * @package   mod_videotrackermax
+ * @copyright 2026 Eduardo Kraus {@link https://eduardokraus.com}
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
 namespace mod_videotrackermax\aggregation;
 
+/**
+ * Class calculator.
+ */
 class calculator {
+    /**
+     * Method day_start.
+     *
+     * @param int $timestamp Parameter timestamp.
+     * @return int Return value.
+     */
     public static function day_start(int $timestamp): int {
         $timezone = \core_date::get_server_timezone_object();
         $date = (new \DateTimeImmutable('@' . max(0, $timestamp)))->setTimezone($timezone);
         return $date->setTime(0, 0, 0)->getTimestamp();
     }
 
+    /**
+     * Method summarise.
+     *
+     * @param array $sessions Parameter sessions.
+     * @param array $coverage Parameter coverage.
+     * @param int $bucketcount Parameter bucketcount.
+     * @return array Return value.
+     */
     public static function summarise(array $sessions, array $coverage, int $bucketcount): array {
         $bucketcount = max(10, min(1000, $bucketcount));
         $duration = (int)($coverage['duration'] ?? 0);
