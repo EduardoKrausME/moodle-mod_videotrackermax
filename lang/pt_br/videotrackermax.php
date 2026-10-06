@@ -112,6 +112,7 @@ $string['privacy:metadata:bucket:watched'] = 'Se o aluno assistiu ao bucket.';
 $string['privacy:path'] = 'Analytics do Video Tracker Max';
 $string['videotrackermax:addinstance'] = 'Adicionar atividade Video Tracker Max';
 $string['videotrackermax:view'] = 'Visualizar Video Tracker Max';
+$string['videotrackermax:participate'] = 'Participar do consumo de vídeo do Video Tracker Max';
 $string['videotrackermax:viewanalytics'] = 'Visualizar analytics coletivos';
 $string['videotrackermax:viewindividual'] = 'Visualizar analytics individuais';
 $string['videotrackermax:export'] = 'Exportar analytics';
