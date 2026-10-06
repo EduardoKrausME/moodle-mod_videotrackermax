@@ -8,11 +8,11 @@ Playback and tracking are deliberately delegated to [local_video_bridge](https:/
 
 **Viewing heatmap** shows how many learners actually watched each part of the video. A strong area means more unique learners reached that bucket; it does not mean they understood the content.
 
-**Retention** shows the percentage of learners who reached each position relative to the population included by the active filters. A drop indicates that fewer learners reached later positions.
+**Retention** shows the percentage of the selected learner population who reached each position. Learners who have not started remain in the denominator with 0%, so the curve describes class consumption rather than only the people who already pressed play. A drop indicates that fewer learners reached later positions.
 
 **Replay** highlights positions where learners moved backward and watched material again. A replay peak may indicate difficulty, importance, review before an assessment, or ordinary study behaviour. Correlation is not causation.
 
-**Drop-off** shows where playback sessions ended. A peak can indicate loss of attention, but it can also be caused by a natural stopping point, session interruption or learners returning later.
+**Drop-off** shows where a closed playback session stopped without an explicit natural video-end event. Reaching the normal end is completion evidence, not abandonment. A peak can indicate loss of attention, a session interruption or a point where learners commonly stop and return later.
 
 **Skip** shows forward jumps. Skips can indicate familiar content, navigation behaviour, searching for a specific explanation or content learners considered less useful.
 
@@ -29,19 +29,19 @@ The scheduled aggregation task incrementally materializes:
 - one learner/day summary;
 - per-learner/day heatmap buckets;
 - per-day/per-group aggregate buckets;
-- a cursor per activity/media hash.
+- a stable `(timemodified, id)` cursor per activity/media hash.
 
-Opening a dashboard therefore queries compact materialized data instead of raw playback events.
+Normal cron runs consume bounded batches of compact sessions, while an administrative rebuild keeps paging through the public bridge API until the activity is consolidated. Opening a dashboard therefore queries compact materialized data instead of raw playback events.
 
 ## Privacy
 
-Collective dashboards respect Moodle groups and the administrative minimum population threshold. Individual reports require a separate capability. Learners see only their own progress when that option is enabled.
+Collective dashboards respect Moodle groups and the administrative minimum population threshold. The threshold is enforced against both the selected participant population and the observed sample, which avoids exposing a tiny active sample inside a large class. Individual reports require a separate capability. Learners see only their own progress when that option is enabled.
 
 CSV exports contain consolidated report metrics, not internal bridge telemetry.
 
 ## Completion
 
-Custom completion uses the authoritative normalized percentage stored by Video Bridge. Video Tracker Max does not maintain a competing progress percentage.
+Custom completion uses the authoritative normalized percentage stored by Video Bridge. Video Tracker Max does not maintain a competing progress percentage, and a Video Bridge analytics update triggers Moodle completion re-evaluation immediately.
 
 
 ## Comparisons and individual drill-down

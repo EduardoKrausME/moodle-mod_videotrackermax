@@ -1,27 +1,4 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
-
-/**
- * dashboard.php
- *
- * @package   mod_videotrackermax
- * @copyright 2026 Eduardo Kraus {@link https://eduardokraus.com}
- * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-
 require('../../config.php');
 
 use mod_videotrackermax\report\filters;
@@ -565,8 +542,19 @@ if ($section === 'overview') {
     if (!$summaries) {
         echo $OUTPUT->notification(get_string('nodata', 'videotrackermax'), 'info');
     } else {
-        $userids = array_map(static fn($row): int => (int)$row->userid, $summaries);
-        $users = $DB->get_records_list('user', 'id', $userids, '', 'id,firstname,lastname,email,picture,imagealt');
+        $page = max(0, optional_param('page', 0, PARAM_INT));
+        $perpage = 100;
+        $total = count($summaries);
+        $pagesummaries = array_slice($summaries, $page * $perpage, $perpage);
+        $userids = array_map(static fn($row): int => (int)$row->userid, $pagesummaries);
+        $users = $DB->get_records_list(
+            'user',
+            'id',
+            $userids,
+            '',
+            'id,firstname,lastname,email,picture,imagealt'
+        );
+
         $table = new html_table();
         $table->head = [
             get_string('fullname', 'videotrackermax'),
@@ -577,7 +565,7 @@ if ($section === 'overview') {
             get_string('averagespeed', 'videotrackermax'),
             get_string('completionstatus', 'videotrackermax'),
         ];
-        foreach ($summaries as $summary) {
+        foreach ($pagesummaries as $summary) {
             $user = $users[$summary->userid] ?? null;
             if (!$user) {
                 continue;
@@ -601,6 +589,14 @@ if ($section === 'overview') {
             ];
         }
         echo html_writer::table($table);
+
+        if ($total > $perpage) {
+            $pagingurl = new moodle_url(
+                '/mod/videotrackermax/dashboard.php',
+                ['id' => $cm->id, 'section' => 'students'] + $filterparams
+            );
+            echo $OUTPUT->paging_bar($total, $page, $perpage, $pagingurl);
+        }
     }
 }
 

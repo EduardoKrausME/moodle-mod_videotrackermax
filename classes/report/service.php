@@ -1,27 +1,4 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
-
-/**
- * service.php
- *
- * @package   mod_videotrackermax
- * @copyright 2026 Eduardo Kraus {@link https://eduardokraus.com}
- * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-
 namespace mod_videotrackermax\report;
 
 use context;
@@ -29,63 +6,24 @@ use context_module;
 use context_system;
 use stdClass;
 
-/**
- * Class service.
- */
 class service {
-    /**
-     * Property activity.
-     *
-     * @var stdClass
-     */
     private stdClass $activity;
-    /**
-     * Property cm.
-     *
-     * @var stdClass
-     */
     private stdClass $cm;
-    /**
-     * Property context.
-     *
-     * @var context_module
-     */
     private context_module $context;
-    /**
-     * Property minimum.
-     *
-     * @var int
-     */
     private int $minimum;
 
-    /**
-     * Method __construct.
-     *
-     * @param stdClass $activity Parameter activity.
-     * @param stdClass $cm Parameter cm.
-     * @param context_module $context Parameter context.
-     */
     public function __construct(stdClass $activity, stdClass $cm, context_module $context) {
         $this->activity = $activity;
         $this->cm = $cm;
         $this->context = $context;
-        $this->minimum = max(1, (int)get_config('videotrackermax', 'minaggregateusers'));
+        $configuredminimum = get_config('videotrackermax', 'minaggregateusers');
+        $this->minimum = max(1, $configuredminimum === false ? 5 : (int)$configuredminimum);
     }
 
-    /**
-     * Method minimum_population.
-     *
-     * @return int Return value.
-     */
     public function minimum_population(): int {
         return $this->minimum;
     }
 
-    /**
-     * Method group_options.
-     *
-     * @return array Return value.
-     */
     public function group_options(): array {
         $options = [0 => get_string('allparticipants', 'videotrackermax')];
         foreach ($this->visible_groups() as $group) {
@@ -94,11 +32,6 @@ class service {
         return $options;
     }
 
-    /**
-     * Method grouping_options.
-     *
-     * @return array Return value.
-     */
     public function grouping_options(): array {
         global $DB;
         $options = [0 => get_string('allgroupings', 'videotrackermax')];
@@ -109,11 +42,6 @@ class service {
         return $options;
     }
 
-    /**
-     * Method cohort_options.
-     *
-     * @return array Return value.
-     */
     public function cohort_options(): array {
         global $DB;
         $options = [0 => get_string('allcohorts', 'videotrackermax')];
@@ -127,16 +55,10 @@ class service {
         return $options;
     }
 
-    /**
-     * Method user_summaries.
-     *
-     * @param array $filters Parameter filters.
-     * @return array Return value.
-     */
     public function user_summaries(array $filters): array {
         global $DB;
 
-        [$where, $params] = $this->user_where($filters);
+        [$where, $params, $population] = $this->user_where($filters);
         $sql = "SELECT u.userid,
                        MAX(u.duration) AS duration,
                        SUM(u.watchtime) AS watchtime,
@@ -150,6 +72,30 @@ class service {
               GROUP BY u.userid";
 
         $records = array_values($DB->get_records_sql($sql, $params));
+
+        // The collective denominator is the selected participant population, not
+        // only learners who already generated telemetry. Non-starters are
+        // represented as zero-value report rows without persisting fake analytics.
+        $byuserid = [];
+        foreach ($records as $row) {
+            $byuserid[(int)$row->userid] = $row;
+        }
+        foreach ($population as $userid) {
+            if (isset($byuserid[$userid])) {
+                continue;
+            }
+            $byuserid[$userid] = (object)[
+                'userid' => $userid,
+                'duration' => 0,
+                'watchtime' => 0,
+                'sessions' => 0,
+                'reachedend' => 0,
+                'speedavg' => 1.0,
+                'firststarted' => 0,
+                'lastended' => 0,
+            ];
+        }
+        $records = array_values($byuserid);
         if (!$records) {
             return [];
         }
@@ -172,20 +118,45 @@ class service {
             'bucketwatched' => 1,
         ];
         $this->apply_dates($bucketwhere, $bucketparams, $filters, '');
-        [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'coverageuser');
-        $bucketwhere[] = 'userid ' . $insql;
-        $bucketparams += $inparams;
 
-        $coverage = $DB->get_records_sql(
-            "SELECT userid, COUNT(DISTINCT bucket) AS watchedbuckets
-               FROM {videotrackermax_bucket}
-              WHERE " . implode(' AND ', $bucketwhere) . "
-           GROUP BY userid",
-            $bucketparams
-        );
+        $coverage = [];
+        foreach (array_chunk($userids, 500) as $chunkindex => $chunk) {
+            [$insql, $inparams] = $DB->get_in_or_equal(
+                $chunk,
+                SQL_PARAMS_NAMED,
+                'coverageuser' . $chunkindex
+            );
+            $chunkwhere = $bucketwhere;
+            $chunkwhere[] = 'userid ' . $insql;
+            foreach ($DB->get_records_sql(
+                "SELECT userid, COUNT(DISTINCT bucket) AS watchedbuckets
+                   FROM {videotrackermax_bucket}
+                  WHERE " . implode(' AND ', $chunkwhere) . "
+               GROUP BY userid",
+                $bucketparams + $inparams
+            ) as $userid => $row) {
+                $coverage[(int)$userid] = $row;
+            }
+        }
 
         $bucketcount = max(1, (int)$this->activity->bucketcount);
         $completionpercent = max(0, min(100, (int)$this->activity->completionpercent));
+        $mediahash = \local_video_bridge\analytics::media_hash(
+            (string)$this->activity->videosource,
+            (string)$this->activity->sourceconfig
+        );
+        $progressrows = \local_video_bridge\progress\manager::get_activity_progress(
+            $this->context->id,
+            'mod_videotrackermax',
+            (int)$this->activity->id,
+            $mediahash,
+            $userids
+        );
+        $progressbyuser = [];
+        foreach ($progressrows as $progress) {
+            $progressbyuser[(int)$progress->userid] = $progress;
+        }
+
         foreach ($records as $row) {
             $watchedbuckets = isset($coverage[$row->userid])
                 ? (int)$coverage[$row->userid]->watchedbuckets
@@ -193,8 +164,11 @@ class service {
             $row->percent = (int)round(($watchedbuckets / $bucketcount) * 100);
             $row->percent = max(0, min(100, $row->percent));
             $row->reachedend = !empty($row->reachedend) ? 1 : 0;
+            $row->authoritativepercent = isset($progressbyuser[$row->userid])
+                ? (int)$progressbyuser[$row->userid]->percent
+                : 0;
             $row->completed = $completionpercent > 0
-                ? ($row->percent >= $completionpercent ? 1 : 0)
+                ? ($row->authoritativepercent >= $completionpercent ? 1 : 0)
                 : $row->reachedend;
         }
 
@@ -216,13 +190,6 @@ class service {
         }));
     }
 
-    /**
-     * Method heatmap.
-     *
-     * @param array $filters Parameter filters.
-     * @param ?array $summaries Parameter summaries.
-     * @return array Return value.
-     */
     public function heatmap(array $filters, ?array $summaries = null): array {
         global $DB;
 
@@ -257,70 +224,81 @@ class service {
             ),
         ];
         $this->apply_dates($where, $params, $filters, '');
-        [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'heatuser');
-        $where[] = 'userid ' . $insql;
-        $params += $inparams;
 
-        $sql = "SELECT x.bucket,
-                       SUM(x.watched) AS viewers,
-                       SUM(x.plays) AS plays,
-                       SUM(x.replays) AS replays,
-                       SUM(x.pauses) AS pauses,
-                       SUM(x.skips) AS skips,
-                       SUM(x.dropoffs) AS dropoffs
-                  FROM (
-                        SELECT userid, bucket,
-                               MAX(watched) AS watched,
-                               SUM(plays) AS plays,
-                               SUM(replays) AS replays,
-                               SUM(pauses) AS pauses,
-                               SUM(skips) AS skips,
-                               SUM(dropoffs) AS dropoffs
-                          FROM {videotrackermax_bucket}
-                         WHERE " . implode(' AND ', $where) . "
-                      GROUP BY userid, bucket
-                  ) x
-              GROUP BY x.bucket
-              ORDER BY x.bucket";
-        foreach ($DB->get_records_sql($sql, $params) as $row) {
-            $bucket = (int)$row->bucket;
-            if (isset($empty[$bucket])) {
+        foreach (array_chunk($userids, 500) as $chunkindex => $chunk) {
+            [$insql, $inparams] = $DB->get_in_or_equal(
+                $chunk,
+                SQL_PARAMS_NAMED,
+                'heatuser' . $chunkindex
+            );
+            $chunkwhere = $where;
+            $chunkwhere[] = 'userid ' . $insql;
+
+            $sql = "SELECT x.bucket,
+                           SUM(x.watched) AS viewers,
+                           SUM(x.plays) AS plays,
+                           SUM(x.replays) AS replays,
+                           SUM(x.pauses) AS pauses,
+                           SUM(x.skips) AS skips,
+                           SUM(x.dropoffs) AS dropoffs
+                      FROM (
+                            SELECT userid, bucket,
+                                   MAX(watched) AS watched,
+                                   SUM(plays) AS plays,
+                                   SUM(replays) AS replays,
+                                   SUM(pauses) AS pauses,
+                                   SUM(skips) AS skips,
+                                   SUM(dropoffs) AS dropoffs
+                              FROM {videotrackermax_bucket}
+                             WHERE " . implode(' AND ', $chunkwhere) . "
+                          GROUP BY userid, bucket
+                      ) x
+                  GROUP BY x.bucket
+                  ORDER BY x.bucket";
+
+            foreach ($DB->get_records_sql($sql, $params + $inparams) as $row) {
+                $bucket = (int)$row->bucket;
+                if (!isset($empty[$bucket])) {
+                    continue;
+                }
                 foreach (['viewers', 'plays', 'replays', 'pauses', 'skips', 'dropoffs'] as $field) {
-                    $empty[$bucket][$field] = (int)$row->{$field};
+                    $empty[$bucket][$field] += (int)$row->{$field};
                 }
             }
         }
         return array_values($empty);
     }
 
-    /**
-     * Method metrics.
-     *
-     * @param array $filters Parameter filters.
-     * @return array Return value.
-     */
     public function metrics(array $filters): array {
         $summaries = $this->user_summaries($filters);
         $heatmap = $this->heatmap($filters, $summaries);
         $count = count($summaries);
+        $startedrows = array_values(array_filter(
+            $summaries,
+            static fn($row): bool => (int)$row->sessions > 0
+        ));
+        $started = count($startedrows);
         $percents = array_map(static fn($row): int => (int)$row->percent, $summaries);
-        $watchtimes = array_map(static fn($row): int => (int)$row->watchtime, $summaries);
-        $sessions = array_map(static fn($row): int => (int)$row->sessions, $summaries);
+        $watchtimes = array_map(static fn($row): int => (int)$row->watchtime, $startedrows);
+        $sessions = array_map(static fn($row): int => (int)$row->sessions, $startedrows);
         $completed = count(array_filter($summaries, static fn($row): bool => !empty($row->completed)));
         $reachedend = count(array_filter($summaries, static fn($row): bool => !empty($row->reachedend)));
         $duration = $summaries ? max(array_map(static fn($row): int => (int)$row->duration, $summaries)) : 0;
 
         $metric = [
             'population' => $count,
-            'suppressed' => $count > 0 && $count < $this->minimum,
-            'started' => $count,
+            'suppressed' => $count > 0 && (
+                $count < $this->minimum ||
+                ($started > 0 && $started < $this->minimum)
+            ),
+            'started' => $started,
             'completed' => $completed,
             'averagepercent' => $count ? array_sum($percents) / $count : 0,
             'medianpercent' => self::median($percents),
-            'averagewatchtime' => $count ? array_sum($watchtimes) / $count : 0,
-            'averagesessions' => $count ? array_sum($sessions) / $count : 0,
-            'averagespeed' => $count
-                ? array_sum(array_map(static fn($row): float => (float)$row->speedavg, $summaries)) / $count
+            'averagewatchtime' => $started ? array_sum($watchtimes) / $started : 0,
+            'averagesessions' => $started ? array_sum($sessions) / $started : 0,
+            'averagespeed' => $started
+                ? array_sum(array_map(static fn($row): float => (float)$row->speedavg, $startedrows)) / $started
                 : 1.0,
             'endpercent' => $count ? ($reachedend / $count) * 100 : 0,
             'duration' => $duration,
@@ -348,13 +326,6 @@ class service {
         return $metric;
     }
 
-    /**
-     * Method retention.
-     *
-     * @param array $filters Parameter filters.
-     * @param ?array $summaries Parameter summaries.
-     * @return array Return value.
-     */
     public function retention(array $filters, ?array $summaries = null): array {
         $summaries ??= $this->user_summaries($filters);
         $population = count($summaries);
@@ -372,15 +343,6 @@ class service {
         return $series;
     }
 
-    /**
-     * Method comparison.
-     *
-     * @param array $filters Parameter filters.
-     * @param string $type Parameter type.
-     * @param int $a Parameter a.
-     * @param int $b Parameter b.
-     * @return array Return value.
-     */
     public function comparison(array $filters, string $type, int $a, int $b): array {
         $result = [];
         foreach (['a' => $a, 'b' => $b] as $key => $id) {
@@ -409,14 +371,6 @@ class service {
         return $result;
     }
 
-    /**
-     * Method period_comparison.
-     *
-     * @param array $filters Parameter filters.
-     * @param array $a Parameter a.
-     * @param array $b Parameter b.
-     * @return array Return value.
-     */
     public function period_comparison(array $filters, array $a, array $b): array {
         $result = [];
         foreach (['a' => $a, 'b' => $b] as $key => $period) {
@@ -434,12 +388,6 @@ class service {
         return $result;
     }
 
-    /**
-     * Method dimension_options.
-     *
-     * @param string $type Parameter type.
-     * @return array Return value.
-     */
     public function dimension_options(string $type): array {
         if ($type === 'group') {
             $options = $this->group_options();
@@ -454,12 +402,6 @@ class service {
         return $options;
     }
 
-    /**
-     * Method median.
-     *
-     * @param array $values Parameter values.
-     * @return float Return value.
-     */
     public static function median(array $values): float {
         if (!$values) {
             return 0.0;
@@ -472,14 +414,8 @@ class service {
             : ((float)$values[$middle - 1] + (float)$values[$middle]) / 2;
     }
 
-    /**
-     * Method user_where.
-     *
-     * @param array $filters Parameter filters.
-     * @return array Return value.
-     */
     private function user_where(array $filters): array {
-        global $DB;
+        global $DB, $USER;
 
         $where = [
             'u.activityid = :activityid',
@@ -495,32 +431,106 @@ class service {
         $this->apply_dates($where, $params, $filters, 'u.');
 
         $population = $this->population_userids($filters);
-        if ($population !== null) {
-            if (!$population) {
-                $where[] = '1 = 0';
-            } else {
-                [$insql, $inparams] = $DB->get_in_or_equal($population, SQL_PARAMS_NAMED, 'population');
-                $where[] = 'u.userid ' . $insql;
-                $params += $inparams;
-            }
+        if (!$population) {
+            $where[] = '1 = 0';
+            return [$where, $params, []];
         }
-        return [$where, $params];
+
+        [$enrolledsql, $enrolledparams] = get_enrolled_sql(
+            $this->context,
+            'mod/videotrackermax:participate',
+            0,
+            true
+        );
+        $where[] = 'u.userid IN (' . $enrolledsql . ')';
+        $params += $enrolledparams;
+
+        $groupmode = groups_get_activity_groupmode($this->cm);
+        if ($groupmode == SEPARATEGROUPS && !has_capability('moodle/site:accessallgroups', $this->context)) {
+            $own = groups_get_all_groups(
+                (int)$this->activity->course,
+                (int)$USER->id,
+                (int)$this->cm->groupingid
+            );
+            $this->add_group_sql_scope($where, $params, array_keys($own), 'ownscope');
+        }
+
+        $groupid = max(0, (int)($filters['groupid'] ?? 0));
+        if ($groupid) {
+            $this->add_group_sql_scope($where, $params, [$groupid], 'groupscope');
+        }
+
+        $groupingid = max(0, (int)($filters['groupingid'] ?? 0));
+        if ($groupingid) {
+            $groups = groups_get_all_groups((int)$this->activity->course, 0, $groupingid);
+            $allowedgroups = array_intersect_key($groups, $this->visible_groups());
+            $this->add_group_sql_scope($where, $params, array_keys($allowedgroups), 'groupingscope');
+        }
+
+        $cohortid = max(0, (int)($filters['cohortid'] ?? 0));
+        if ($cohortid) {
+            $where[] = "EXISTS (
+                SELECT 1
+                  FROM {cohort_members} vtmcohort
+                 WHERE vtmcohort.userid = u.userid
+                   AND vtmcohort.cohortid = :reportcohortid
+            )";
+            $params['reportcohortid'] = $cohortid;
+        }
+
+        return [$where, $params, $population];
     }
 
-    /**
-     * Method population_userids.
-     *
-     * @param array $filters Parameter filters.
-     * @return ?array Return value.
-     */
+    private function add_group_sql_scope(
+        array &$where,
+        array &$params,
+        array $groupids,
+        string $prefix
+    ): void {
+        global $DB;
+
+        $groupids = array_values(array_unique(array_filter(array_map('intval', $groupids))));
+        if (!$groupids) {
+            $where[] = '1 = 0';
+            return;
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal(
+            $groupids,
+            SQL_PARAMS_NAMED,
+            $prefix
+        );
+        $where[] = "EXISTS (
+            SELECT 1
+              FROM {groups_members} vtmgm
+             WHERE vtmgm.userid = u.userid
+               AND vtmgm.groupid {$insql}
+        )";
+        $params += $inparams;
+    }
+
     private function population_userids(array $filters): ?array {
         global $DB, $USER;
 
-        $population = null;
+        $enrolled = get_enrolled_users(
+            $this->context,
+            'mod/videotrackermax:participate',
+            0,
+            'u.id',
+            null,
+            0,
+            0,
+            true
+        );
+        $population = array_map('intval', array_keys($enrolled));
+
         $groupmode = groups_get_activity_groupmode($this->cm);
         if ($groupmode == SEPARATEGROUPS && !has_capability('moodle/site:accessallgroups', $this->context)) {
             $own = groups_get_all_groups((int)$this->activity->course, (int)$USER->id, (int)$this->cm->groupingid);
-            $population = $this->users_in_groups(array_map('intval', array_keys($own)));
+            $population = $this->intersect(
+                $population,
+                $this->users_in_groups(array_map('intval', array_keys($own)))
+            );
         }
 
         $groupid = max(0, (int)($filters['groupid'] ?? 0));
@@ -565,11 +575,6 @@ class service {
         return $population;
     }
 
-    /**
-     * Method visible_groups.
-     *
-     * @return array Return value.
-     */
     private function visible_groups(): array {
         global $USER;
 
@@ -579,12 +584,6 @@ class service {
         return groups_get_all_groups((int)$this->activity->course, (int)$USER->id, (int)$this->cm->groupingid);
     }
 
-    /**
-     * Method users_in_groups.
-     *
-     * @param array $groupids Parameter groupids.
-     * @return array Return value.
-     */
     private function users_in_groups(array $groupids): array {
         $users = [];
         foreach ($groupids as $groupid) {
@@ -595,13 +594,6 @@ class service {
         return array_values($users);
     }
 
-    /**
-     * Method intersect.
-     *
-     * @param ?array $current Parameter current.
-     * @param array $next Parameter next.
-     * @return array Return value.
-     */
     private function intersect(?array $current, array $next): array {
         $next = array_values(array_unique(array_map('intval', $next)));
         if ($current === null) {
@@ -610,15 +602,6 @@ class service {
         return array_values(array_intersect($current, $next));
     }
 
-    /**
-     * Method apply_dates.
-     *
-     * @param array $where Parameter where.
-     * @param array $params Parameter params.
-     * @param array $filters Parameter filters.
-     * @param string $prefix Parameter prefix.
-     * @return void Return value.
-     */
     private function apply_dates(array &$where, array &$params, array $filters, string $prefix): void {
         if (!empty($filters['from'])) {
             $where[] = $prefix . 'day >= :fromday';
@@ -630,25 +613,11 @@ class service {
         }
     }
 
-    /**
-     * Method bucket_position.
-     *
-     * @param int $bucket Parameter bucket.
-     * @param int $duration Parameter duration.
-     * @return int Return value.
-     */
     private function bucket_position(int $bucket, int $duration): int {
         $count = max(1, (int)$this->activity->bucketcount);
         return $duration > 0 ? (int)floor(($bucket / $count) * $duration) : 0;
     }
 
-    /**
-     * Method dimension_label.
-     *
-     * @param string $type Parameter type.
-     * @param int $id Parameter id.
-     * @return string Return value.
-     */
     private function dimension_label(string $type, int $id): string {
         $options = $this->dimension_options($type);
         return $options[$id] ?? (string)$id;

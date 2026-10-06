@@ -1,42 +1,14 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
-
-/**
- * service.php
- *
- * @package   mod_videotrackermax
- * @copyright 2026 Eduardo Kraus {@link https://eduardokraus.com}
- * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-
 namespace mod_videotrackermax\aggregation;
 
 use context_module;
 use local_video_bridge\analytics;
 use stdClass;
 
-/**
- * Class service.
- */
 class service {
-    /**
-     * Method process_all.
-     *
-     * @return void Return value.
-     */
+    private const BATCH_SIZE = 500;
+    private const MAX_CRON_BATCHES = 4;
+
     public function process_all(): void {
         global $DB;
 
@@ -50,12 +22,6 @@ class service {
         }
     }
 
-    /**
-     * Method rebuild_activity.
-     *
-     * @param stdClass $activity Parameter activity.
-     * @return void Return value.
-     */
     public function rebuild_activity(stdClass $activity): void {
         global $DB;
 
@@ -68,13 +34,6 @@ class service {
         $this->process_activity($activity, true);
     }
 
-    /**
-     * Method process_activity.
-     *
-     * @param stdClass $activity Parameter activity.
-     * @param bool $force Parameter force.
-     * @return void Return value.
-     */
     public function process_activity(stdClass $activity, bool $force = false): void {
         global $DB;
 
@@ -87,50 +46,60 @@ class service {
         ]);
 
         $cursor = $force ? 0 : (int)($state->lastprocessed ?? 0);
-        $modified = analytics::get_session_metrics(
-            $context->id,
-            'mod_videotrackermax',
-            (int)$activity->id,
-            $mediahash,
-            null,
-            ['modifiedfrom' => max(0, $cursor - 2)]
-        );
+        $cursorid = $force ? 0 : (int)($state->lastsessionid ?? 0);
+        $batch = 0;
 
-        if (!$modified) {
-            if (!$state) {
-                $this->save_state((int)$activity->id, $mediahash, $cursor);
+        do {
+            $modified = analytics::get_session_metrics(
+                $context->id,
+                'mod_videotrackermax',
+                (int)$activity->id,
+                $mediahash,
+                null,
+                [
+                    'modifiedafter' => $cursor,
+                    'modifiedafterid' => $cursorid,
+                    'limit' => self::BATCH_SIZE,
+                ]
+            );
+
+            if (!$modified) {
+                if (!$state) {
+                    $this->save_state((int)$activity->id, $mediahash, $cursor, $cursorid);
+                }
+                break;
             }
-            return;
-        }
 
-        $affected = [];
-        $maxmodified = $cursor;
-        foreach ($modified as $session) {
-            $day = calculator::day_start((int)$session->startedat);
-            $affected[$day][(int)$session->userid] = true;
-            $maxmodified = max($maxmodified, (int)$session->timemodified);
-        }
+            $affected = [];
+            foreach ($modified as $session) {
+                $day = calculator::day_start((int)$session->startedat);
+                $affected[$day][(int)$session->userid] = true;
 
-        foreach ($affected as $day => $users) {
-            foreach (array_keys($users) as $userid) {
-                $this->rebuild_user_day($activity, $context, $mediahash, (int)$day, (int)$userid);
+                // Bridge guarantees this ordering when modifiedafter is used.
+                $cursor = (int)$session->timemodified;
+                $cursorid = (int)$session->id;
             }
-            $this->rebuild_day_groups($activity, $mediahash, (int)$day);
-        }
 
-        $this->save_state((int)$activity->id, $mediahash, $maxmodified);
+            foreach ($affected as $day => $users) {
+                foreach (array_keys($users) as $userid) {
+                    $this->rebuild_user_day($activity, $context, $mediahash, (int)$day, (int)$userid);
+                }
+                $this->rebuild_day_groups($activity, $mediahash, (int)$day);
+            }
+
+            // Advance only after every materialized row in the batch was rebuilt.
+            $this->save_state((int)$activity->id, $mediahash, $cursor, $cursorid);
+            $state = true;
+            $batch++;
+
+            // Normal cron work is deliberately bounded. Administrative rebuilds
+            // keep consuming batches until the public bridge API is exhausted.
+            if (!$force && $batch >= self::MAX_CRON_BATCHES) {
+                break;
+            }
+        } while (count($modified) === self::BATCH_SIZE);
     }
 
-    /**
-     * Method rebuild_user_day.
-     *
-     * @param stdClass $activity Parameter activity.
-     * @param context_module $context Parameter context.
-     * @param string $mediahash Parameter mediahash.
-     * @param int $day Parameter day.
-     * @param int $userid Parameter userid.
-     * @return void Return value.
-     */
     private function rebuild_user_day(
         stdClass $activity,
         context_module $context,
@@ -205,14 +174,6 @@ class service {
         }
     }
 
-    /**
-     * Method rebuild_day_groups.
-     *
-     * @param stdClass $activity Parameter activity.
-     * @param string $mediahash Parameter mediahash.
-     * @param int $day Parameter day.
-     * @return void Return value.
-     */
     private function rebuild_day_groups(stdClass $activity, string $mediahash, int $day): void {
         global $DB;
 
@@ -313,21 +274,19 @@ class service {
         }
     }
 
-    /**
-     * Method save_state.
-     *
-     * @param int $activityid Parameter activityid.
-     * @param string $mediahash Parameter mediahash.
-     * @param int $cursor Parameter cursor.
-     * @return void Return value.
-     */
-    private function save_state(int $activityid, string $mediahash, int $cursor): void {
+    private function save_state(
+        int $activityid,
+        string $mediahash,
+        int $cursor,
+        int $cursorid
+    ): void {
         global $DB;
 
         $params = ['activityid' => $activityid, 'mediahash' => $mediahash];
         $record = $DB->get_record('videotrackermax_state', $params);
         $values = (object)($params + [
             'lastprocessed' => $cursor,
+            'lastsessionid' => $cursorid,
             'timemodified' => time(),
         ]);
         if ($record) {

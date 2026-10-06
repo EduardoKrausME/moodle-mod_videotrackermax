@@ -1,27 +1,4 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
-
-/**
- * report_query_test.php
- *
- * @package   mod_videotrackermax
- * @copyright 2026 Eduardo Kraus {@link https://eduardokraus.com}
- * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-
 namespace mod_videotrackermax;
 
 defined('MOODLE_INTERNAL') || die;
@@ -29,15 +6,7 @@ defined('MOODLE_INTERNAL') || die;
 use context_module;
 use mod_videotrackermax\report\service;
 
-/**
- * Class report_query_test.
- */
 final class report_query_test extends \advanced_testcase {
-    /**
-     * Method test_heatmap_deduplicates_same_user_across_days.
-     *
-     * @return void Return value.
-     */
     public function test_heatmap_deduplicates_same_user_across_days(): void {
         global $DB, $CFG;
 
@@ -81,6 +50,12 @@ final class report_query_test extends \advanced_testcase {
 
         $u1 = $this->getDataGenerator()->create_user();
         $u2 = $this->getDataGenerator()->create_user();
+        $u3 = $this->getDataGenerator()->create_user();
+        $studentrole = $DB->get_record('role', ['shortname' => 'student'], '*', MUST_EXIST);
+        $this->getDataGenerator()->enrol_user($u1->id, $course->id, $studentrole->id);
+        $this->getDataGenerator()->enrol_user($u2->id, $course->id, $studentrole->id);
+        $this->getDataGenerator()->enrol_user($u3->id, $course->id, $studentrole->id);
+
         $mediahash = \local_video_bridge\analytics::media_hash('test', '{}');
         $day1 = \mod_videotrackermax\aggregation\calculator::day_start(time() - DAYSECS);
         $day2 = \mod_videotrackermax\aggregation\calculator::day_start(time());
@@ -138,7 +113,7 @@ final class report_query_test extends \advanced_testcase {
         $summaries = $report->user_summaries($filters);
         $heatmap = $report->heatmap($filters, $summaries);
 
-        $this->assertCount(2, $summaries);
+        $this->assertCount(3, $summaries);
         // The daily stored percentage must not leak into the period result.
         // Only bucket 0 was watched, so period coverage is 10%, not MAX(50, 80).
         $byuser = [];
@@ -146,15 +121,16 @@ final class report_query_test extends \advanced_testcase {
             $byuser[(int)$summary->userid] = $summary;
         }
         $this->assertSame(10, (int)$byuser[$u1->id]->percent);
+        $this->assertSame(0, (int)$byuser[$u3->id]->percent);
+        $this->assertSame(0, (int)$byuser[$u3->id]->sessions);
         $this->assertSame(2, $heatmap[0]['viewers']);
         $this->assertSame(3, $heatmap[0]['plays']);
+
+        $metrics = $report->metrics($filters);
+        $this->assertSame(3, $metrics['population']);
+        $this->assertSame(2, $metrics['started']);
     }
 
-    /**
-     * Method test_median_handles_even_and_odd_populations.
-     *
-     * @return void Return value.
-     */
     public function test_median_handles_even_and_odd_populations(): void {
         $this->assertSame(50.0, service::median([10, 50, 90]));
         $this->assertSame(40.0, service::median([10, 30, 50, 70]));
