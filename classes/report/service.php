@@ -1,4 +1,27 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * service.php
+ *
+ * @package   mod_videotrackermax
+ * @copyright 2026 Eduardo Kraus {@link https://eduardokraus.com}
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
 namespace mod_videotrackermax\report;
 
 use context;
@@ -6,12 +29,42 @@ use context_module;
 use context_system;
 use stdClass;
 
+/**
+ * Class service.
+ */
 class service {
+    /**
+     * Property activity.
+     *
+     * @var stdClass
+     */
     private stdClass $activity;
+    /**
+     * Property cm.
+     *
+     * @var stdClass
+     */
     private stdClass $cm;
+    /**
+     * Property context.
+     *
+     * @var context_module
+     */
     private context_module $context;
+    /**
+     * Property minimum.
+     *
+     * @var int
+     */
     private int $minimum;
 
+    /**
+     * Method __construct.
+     *
+     * @param stdClass $activity Parameter activity.
+     * @param stdClass $cm Parameter cm.
+     * @param context_module $context Parameter context.
+     */
     public function __construct(stdClass $activity, stdClass $cm, context_module $context) {
         $this->activity = $activity;
         $this->cm = $cm;
@@ -20,10 +73,20 @@ class service {
         $this->minimum = max(1, $configuredminimum === false ? 5 : (int)$configuredminimum);
     }
 
+    /**
+     * Method minimum_population.
+     *
+     * @return int Return value.
+     */
     public function minimum_population(): int {
         return $this->minimum;
     }
 
+    /**
+     * Method group_options.
+     *
+     * @return array Return value.
+     */
     public function group_options(): array {
         $options = [0 => get_string('allparticipants', 'videotrackermax')];
         foreach ($this->visible_groups() as $group) {
@@ -32,6 +95,11 @@ class service {
         return $options;
     }
 
+    /**
+     * Method grouping_options.
+     *
+     * @return array Return value.
+     */
     public function grouping_options(): array {
         global $DB;
         $options = [0 => get_string('allgroupings', 'videotrackermax')];
@@ -42,6 +110,11 @@ class service {
         return $options;
     }
 
+    /**
+     * Method cohort_options.
+     *
+     * @return array Return value.
+     */
     public function cohort_options(): array {
         global $DB;
         $options = [0 => get_string('allcohorts', 'videotrackermax')];
@@ -55,6 +128,12 @@ class service {
         return $options;
     }
 
+    /**
+     * Method user_summaries.
+     *
+     * @param array $filters Parameter filters.
+     * @return array Return value.
+     */
     public function user_summaries(array $filters): array {
         global $DB;
 
@@ -190,6 +269,13 @@ class service {
         }));
     }
 
+    /**
+     * Method heatmap.
+     *
+     * @param array $filters Parameter filters.
+     * @param ?array $summaries Parameter summaries.
+     * @return array Return value.
+     */
     public function heatmap(array $filters, ?array $summaries = null): array {
         global $DB;
 
@@ -269,6 +355,12 @@ class service {
         return array_values($empty);
     }
 
+    /**
+     * Method metrics.
+     *
+     * @param array $filters Parameter filters.
+     * @return array Return value.
+     */
     public function metrics(array $filters): array {
         $summaries = $this->user_summaries($filters);
         $heatmap = $this->heatmap($filters, $summaries);
@@ -326,6 +418,13 @@ class service {
         return $metric;
     }
 
+    /**
+     * Method retention.
+     *
+     * @param array $filters Parameter filters.
+     * @param ?array $summaries Parameter summaries.
+     * @return array Return value.
+     */
     public function retention(array $filters, ?array $summaries = null): array {
         $summaries ??= $this->user_summaries($filters);
         $population = count($summaries);
@@ -343,6 +442,15 @@ class service {
         return $series;
     }
 
+    /**
+     * Method comparison.
+     *
+     * @param array $filters Parameter filters.
+     * @param string $type Parameter type.
+     * @param int $a Parameter a.
+     * @param int $b Parameter b.
+     * @return array Return value.
+     */
     public function comparison(array $filters, string $type, int $a, int $b): array {
         $result = [];
         foreach (['a' => $a, 'b' => $b] as $key => $id) {
@@ -371,6 +479,14 @@ class service {
         return $result;
     }
 
+    /**
+     * Method period_comparison.
+     *
+     * @param array $filters Parameter filters.
+     * @param array $a Parameter a.
+     * @param array $b Parameter b.
+     * @return array Return value.
+     */
     public function period_comparison(array $filters, array $a, array $b): array {
         $result = [];
         foreach (['a' => $a, 'b' => $b] as $key => $period) {
@@ -388,6 +504,12 @@ class service {
         return $result;
     }
 
+    /**
+     * Method dimension_options.
+     *
+     * @param string $type Parameter type.
+     * @return array Return value.
+     */
     public function dimension_options(string $type): array {
         if ($type === 'group') {
             $options = $this->group_options();
@@ -402,6 +524,12 @@ class service {
         return $options;
     }
 
+    /**
+     * Method median.
+     *
+     * @param array $values Parameter values.
+     * @return float Return value.
+     */
     public static function median(array $values): float {
         if (!$values) {
             return 0.0;
@@ -414,6 +542,12 @@ class service {
             : ((float)$values[$middle - 1] + (float)$values[$middle]) / 2;
     }
 
+    /**
+     * Method user_where.
+     *
+     * @param array $filters Parameter filters.
+     * @return array Return value.
+     */
     private function user_where(array $filters): array {
         global $DB, $USER;
 
@@ -481,6 +615,15 @@ class service {
         return [$where, $params, $population];
     }
 
+    /**
+     * Method add_group_sql_scope.
+     *
+     * @param array $where Parameter where.
+     * @param array $params Parameter params.
+     * @param array $groupids Parameter groupids.
+     * @param string $prefix Parameter prefix.
+     * @return void Return value.
+     */
     private function add_group_sql_scope(
         array &$where,
         array &$params,
@@ -509,6 +652,12 @@ class service {
         $params += $inparams;
     }
 
+    /**
+     * Method population_userids.
+     *
+     * @param array $filters Parameter filters.
+     * @return ?array Return value.
+     */
     private function population_userids(array $filters): ?array {
         global $DB, $USER;
 
@@ -575,6 +724,11 @@ class service {
         return $population;
     }
 
+    /**
+     * Method visible_groups.
+     *
+     * @return array Return value.
+     */
     private function visible_groups(): array {
         global $USER;
 
@@ -584,6 +738,12 @@ class service {
         return groups_get_all_groups((int)$this->activity->course, (int)$USER->id, (int)$this->cm->groupingid);
     }
 
+    /**
+     * Method users_in_groups.
+     *
+     * @param array $groupids Parameter groupids.
+     * @return array Return value.
+     */
     private function users_in_groups(array $groupids): array {
         $users = [];
         foreach ($groupids as $groupid) {
@@ -594,6 +754,13 @@ class service {
         return array_values($users);
     }
 
+    /**
+     * Method intersect.
+     *
+     * @param ?array $current Parameter current.
+     * @param array $next Parameter next.
+     * @return array Return value.
+     */
     private function intersect(?array $current, array $next): array {
         $next = array_values(array_unique(array_map('intval', $next)));
         if ($current === null) {
@@ -602,6 +769,15 @@ class service {
         return array_values(array_intersect($current, $next));
     }
 
+    /**
+     * Method apply_dates.
+     *
+     * @param array $where Parameter where.
+     * @param array $params Parameter params.
+     * @param array $filters Parameter filters.
+     * @param string $prefix Parameter prefix.
+     * @return void Return value.
+     */
     private function apply_dates(array &$where, array &$params, array $filters, string $prefix): void {
         if (!empty($filters['from'])) {
             $where[] = $prefix . 'day >= :fromday';
@@ -613,11 +789,25 @@ class service {
         }
     }
 
+    /**
+     * Method bucket_position.
+     *
+     * @param int $bucket Parameter bucket.
+     * @param int $duration Parameter duration.
+     * @return int Return value.
+     */
     private function bucket_position(int $bucket, int $duration): int {
         $count = max(1, (int)$this->activity->bucketcount);
         return $duration > 0 ? (int)floor(($bucket / $count) * $duration) : 0;
     }
 
+    /**
+     * Method dimension_label.
+     *
+     * @param string $type Parameter type.
+     * @param int $id Parameter id.
+     * @return string Return value.
+     */
     private function dimension_label(string $type, int $id): string {
         $options = $this->dimension_options($type);
         return $options[$id] ?? (string)$id;
