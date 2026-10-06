@@ -19,6 +19,11 @@ $capabilities = [
             'manager' => CAP_ALLOW,
         ],
     ],
+    'mod/videotrackermax:participate' => [
+        'captype' => 'read',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes' => ['student' => CAP_ALLOW],
+    ],
     'mod/videotrackermax:viewanalytics' => [
         'riskbitmask' => RISK_PERSONAL,
         'captype' => 'read',
