@@ -49,12 +49,12 @@ jobs:
         with:
           path: plugin
 
-    - name: Check out Video Bridge
-      uses: actions/checkout@v4
-      with:
-        repository: EduardoKrausME/moodle-local_video_bridge
-        ref: master
-        path: extra-plugins/video_bridge
+      - name: Check out Video Bridge
+        uses: actions/checkout@v4
+        with:
+          repository: EduardoKrausME/moodle-local_video_bridge
+          ref: master
+          path: extra-plugins/video_bridge
 
       - name: Setup PHP ${{ matrix.config.php }}
         uses: shivammathur/setup-php@v2
