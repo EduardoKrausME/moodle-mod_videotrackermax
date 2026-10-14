@@ -35,4 +35,5 @@ Feature: Video Tracker Max analytics dashboard
     Given I log in as "student1"
     And I am on "Course 1" course homepage
     When I follow "Analytics Max"
-    Then I should not see "Analytics" in the "region-main" "region"
+    Then I should see "Analytics Max" in the "region-main" "region"
+    And ".videotrackermax-view a[href*='/mod/videotrackermax/dashboard.php']" "css_element" should not exist
