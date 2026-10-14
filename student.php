@@ -29,6 +29,7 @@ use local_video_bridge\progress\manager as progress_manager;
 use mod_videotrackermax\aggregation\calculator;
 use mod_videotrackermax\report\filters;
 use mod_videotrackermax\report\service;
+use mod_videotrackermax\report\time_formatter;
 
 $id = required_param('id', PARAM_INT);
 $userid = required_param('userid', PARAM_INT);
@@ -116,15 +117,6 @@ $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 $PAGE->set_pagelayout('report');
 
-function mod_videotrackermax_student_time(int $seconds): string {
-    $seconds = max(0, $seconds);
-    $hours = intdiv($seconds, HOURSECS);
-    $minutes = intdiv($seconds % HOURSECS, MINSECS);
-    $remaining = $seconds % MINSECS;
-    return $hours > 0
-        ? sprintf('%02d:%02d:%02d', $hours, $minutes, $remaining)
-        : sprintf('%02d:%02d', $minutes, $remaining);
-}
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('individualreport', 'videotrackermax') . ': ' . fullname($user));
@@ -145,7 +137,7 @@ $table = new html_table();
 $table->head = [get_string('metric', 'videotrackermax'), get_string('value', 'videotrackermax')];
 $table->data = [
     [get_string('watchedpercent', 'videotrackermax'), (int)$summary->percent . '%'],
-    [get_string('watchtime', 'videotrackermax'), mod_videotrackermax_student_time((int)$summary->watchtime)],
+    [get_string('watchtime', 'videotrackermax'), time_formatter::format_seconds((int)$summary->watchtime)],
     [get_string('sessions', 'videotrackermax'), (int)$summary->sessions],
     [get_string('averagespeed', 'videotrackermax'), number_format((float)$summary->speedavg, 2) . 'x'],
     [
@@ -169,7 +161,7 @@ echo html_writer::tag('h3', get_string('individualheatmap', 'videotrackermax'), 
 echo $OUTPUT->render_from_template('mod_videotrackermax/heatmap', [
     'label' => get_string('individualheatmap', 'videotrackermax'),
     'buckets' => $heatmapdata,
-    'endlabel' => mod_videotrackermax_student_time($duration),
+    'endlabel' => time_formatter::format_seconds($duration),
 ]);
 
 echo html_writer::tag('h3', get_string('dailybreakdown', 'videotrackermax'), ['class' => 'h4 mt-4']);
@@ -185,7 +177,7 @@ foreach ($daily as $row) {
     $dailytable->data[] = [
         userdate((int)$row->day, get_string('strftimedatefullshort', 'langconfig')),
         (int)$row->percent . '%',
-        mod_videotrackermax_student_time((int)$row->watchtime),
+        time_formatter::format_seconds((int)$row->watchtime),
         (int)$row->sessions,
         !empty($row->completed) ? get_string('yes') : get_string('no'),
     ];
