@@ -92,6 +92,7 @@ $string['periodafrom'] = 'Período A de';
 $string['periodato'] = 'Período A até';
 $string['periodbfrom'] = 'Período B de';
 $string['periodbto'] = 'Período B até';
+$string['pluginadministration'] = 'Administração do Video Tracker Max';
 $string['pluginname'] = 'Video Tracker Max';
 $string['population'] = 'População';
 $string['privacy:metadata'] = 'O Video Tracker Max materializa analytics compactos por aluno e dia derivados da telemetria do Video Bridge.';

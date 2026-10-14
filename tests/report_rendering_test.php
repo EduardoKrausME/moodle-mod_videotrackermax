@@ -29,6 +29,8 @@ use mod_videotrackermax\output\dashboard_renderer;
 
 /**
  * Regression checks for the extracted dashboard presentation methods.
+ * @covers \mod_videotrackermax\report\time_formatter
+ * @covers \mod_videotrackermax\output\dashboard_renderer
  */
 final class report_rendering_test extends \advanced_testcase {
     /**

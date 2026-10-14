@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * backup_videotrackermax_activity_task.php
+ * backup_videotrackermax_activity_task.class.php
  *
  * @package   mod_videotrackermax
  * @copyright 2026 Eduardo Kraus {@link https://eduardokraus.com}

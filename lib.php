@@ -26,6 +26,12 @@ use local_video_bridge\analytics;
 use local_video_bridge\progress\manager as progress_manager;
 use local_video_bridge\source\manager as source_manager;
 
+/**
+ * Declare supported Moodle activity features.
+ *
+ * @param string $feature Feature identifier.
+ * @return mixed Feature support value.
+ */
 function videotrackermax_supports($feature) {
     switch ($feature) {
         case FEATURE_MOD_ARCHETYPE:
@@ -44,6 +50,13 @@ function videotrackermax_supports($feature) {
     }
 }
 
+/**
+ * Create an activity.
+ *
+ * @param stdClass $data Form data for the new activity.
+ * @param mod_videotrackermax_mod_form|null $mform Module form, if supplied.
+ * @return int New activity id.
+ */
 function videotrackermax_add_instance(stdClass $data, ?mod_videotrackermax_mod_form $mform = null): int {
     global $DB;
 
@@ -64,6 +77,13 @@ function videotrackermax_add_instance(stdClass $data, ?mod_videotrackermax_mod_f
     return $id;
 }
 
+/**
+ * Update an activity and its media resources.
+ *
+ * @param stdClass $data Updated activity values.
+ * @param mod_videotrackermax_mod_form|null $mform Module form, if supplied.
+ * @return bool Whether the update succeeded.
+ */
 function videotrackermax_update_instance(stdClass $data, ?mod_videotrackermax_mod_form $mform = null): bool {
     global $DB;
 
@@ -130,6 +150,12 @@ function videotrackermax_update_instance(stdClass $data, ?mod_videotrackermax_mo
     return $result;
 }
 
+/**
+ * Remove an activity and its materialised analytics.
+ *
+ * @param int $id Activity id.
+ * @return bool Whether the activity existed and was deleted.
+ */
 function videotrackermax_delete_instance(int $id): bool {
     global $DB;
 
@@ -163,6 +189,12 @@ function videotrackermax_delete_instance(int $id): bool {
     return true;
 }
 
+/**
+ * Provide cached details for the course page.
+ *
+ * @param stdClass $coursemodule Course module.
+ * @return cached_cm_info|null Course module information.
+ */
 function videotrackermax_get_coursemodule_info($coursemodule): ?cached_cm_info {
     global $DB;
 
@@ -186,6 +218,12 @@ function videotrackermax_get_coursemodule_info($coursemodule): ?cached_cm_info {
     return $info;
 }
 
+/**
+ * Describe active automatic completion rules.
+ *
+ * @param stdClass $cm Course module.
+ * @return array Completion rule descriptions.
+ */
 function videotrackermax_get_completion_active_rule_descriptions($cm): array {
     if ($cm->completion != COMPLETION_TRACKING_AUTOMATIC ||
             empty($cm->customdata['customcompletionrules']['completionpercent'])) {
@@ -197,6 +235,15 @@ function videotrackermax_get_completion_active_rule_descriptions($cm): array {
     ];
 }
 
+/**
+ * Resolve legacy Moodle completion from video progress.
+ *
+ * @param stdClass $course Course record.
+ * @param stdClass $cm Course module.
+ * @param int $userid User id.
+ * @param bool $type Default completion state.
+ * @return bool Whether the learner completed the video.
+ */
 function videotrackermax_get_completion_state($course, $cm, $userid, $type): bool {
     global $DB;
 

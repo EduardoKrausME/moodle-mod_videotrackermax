@@ -28,6 +28,7 @@ use mod_videotrackermax\aggregation\calculator;
 
 /**
  * Class aggregation_test.
+ * @covers \mod_videotrackermax\aggregation\calculator
  */
 final class aggregation_test extends \advanced_testcase {
     /**

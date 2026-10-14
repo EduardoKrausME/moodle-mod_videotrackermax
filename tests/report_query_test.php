@@ -29,6 +29,7 @@ use mod_videotrackermax\report\service;
 
 /**
  * Class report_query_test.
+ * @covers \mod_videotrackermax\report\service
  */
 final class report_query_test extends \advanced_testcase {
     /**

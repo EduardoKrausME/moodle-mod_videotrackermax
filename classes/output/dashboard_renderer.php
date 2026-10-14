@@ -98,12 +98,16 @@ final class dashboard_renderer {
         );
         $controls[] = html_writer::tag('label',
             get_string('grouping', 'group') .
-            html_writer::select($report->grouping_options(), 'groupingid', $filters['groupingid'], false, ['class' => 'form-select mt-1']),
+            html_writer::select(
+                $report->grouping_options(), 'groupingid', $filters['groupingid'], false, ['class' => 'form-select mt-1']
+            ),
             ['class' => 'form-label']
         );
         $controls[] = html_writer::tag('label',
             get_string('cohort', 'cohort') .
-            html_writer::select($report->cohort_options(), 'cohortid', $filters['cohortid'], false, ['class' => 'form-select mt-1']),
+            html_writer::select(
+                $report->cohort_options(), 'cohortid', $filters['cohortid'], false, ['class' => 'form-select mt-1']
+            ),
             ['class' => 'form-label']
         );
         $controls[] = html_writer::tag('label',
