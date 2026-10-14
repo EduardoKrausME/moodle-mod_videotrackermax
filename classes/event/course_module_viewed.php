@@ -24,8 +24,6 @@
 
 namespace mod_videotrackermax\event;
 
-defined('MOODLE_INTERNAL') || die;
-
 /**
  * Class course_module_viewed.
  */

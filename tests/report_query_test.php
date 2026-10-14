@@ -24,8 +24,6 @@
 
 namespace mod_videotrackermax;
 
-defined('MOODLE_INTERNAL') || die;
-
 use context_module;
 use mod_videotrackermax\report\service;
 

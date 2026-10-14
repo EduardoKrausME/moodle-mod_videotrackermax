@@ -24,8 +24,6 @@
 
 namespace mod_videotrackermax;
 
-defined('MOODLE_INTERNAL') || die;
-
 use mod_videotrackermax\aggregation\calculator;
 
 /**

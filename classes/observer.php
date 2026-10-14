@@ -26,8 +26,6 @@ namespace mod_videotrackermax;
 
 use local_video_bridge\event\analytics_updated;
 
-defined('MOODLE_INTERNAL') || die;
-
 /**
  * Re-evaluates Moodle completion after authoritative Video Bridge progress changes.
  */

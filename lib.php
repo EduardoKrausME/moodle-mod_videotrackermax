@@ -22,8 +22,6 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die;
-
 use local_video_bridge\analytics;
 use local_video_bridge\progress\manager as progress_manager;
 use local_video_bridge\source\manager as source_manager;
