@@ -69,7 +69,7 @@ final class dashboard_renderer {
     ): string {
         $fields = html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
         $fields .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'section', 'value' => $section]);
-    
+
         $controls = [];
         $controls[] = html_writer::tag('label',
             get_string('filterfrom', 'videotrackermax') .
@@ -150,7 +150,7 @@ final class dashboard_renderer {
             ]),
             ['class' => 'form-label']
         );
-    
+
         $grid = '';
         foreach ($controls as $control) {
             $grid .= html_writer::div($control, 'col-12 col-md-6 col-xl');
@@ -164,7 +164,7 @@ final class dashboard_renderer {
             ]),
             'mt-3'
         );
-    
+
         return html_writer::tag('form', $fields, [
             'method' => 'get',
             'action' => (new moodle_url('/mod/videotrackermax/dashboard.php'))->out(false),
@@ -221,7 +221,7 @@ final class dashboard_renderer {
         foreach ($rows as $row) {
             $max = max($max, (int)$row[$metric]);
         }
-    
+
         $buckets = [];
         $count = max(1, count($rows));
         foreach ($rows as $row) {
@@ -242,7 +242,7 @@ final class dashboard_renderer {
                 'title' => $title,
             ];
         }
-    
+
         return $output->render_from_template('mod_videotrackermax/heatmap', [
             'label' => get_string('heatmap:' . $metric, 'videotrackermax'),
             'buckets' => $buckets,
