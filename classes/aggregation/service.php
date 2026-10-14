@@ -32,7 +32,10 @@ use stdClass;
  * Class service.
  */
 class service {
+    /** @var int */
     private const BATCH_SIZE = 500;
+
+    /** @var int */
     private const MAX_CRON_BATCHES = 4;
 
     /**

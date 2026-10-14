@@ -54,7 +54,8 @@ class aggregation_rebuilt extends \core\event\base {
      * @return string Return value.
      */
     public function get_description(): string {
-        return "The user with id '{$this->userid}' rebuilt analytics aggregation for Video Tracker Max activity '{$this->objectid}'.";
+        return "The user with id '{$this->userid}' rebuilt analytics aggregation for Video Tracker Max activity " .
+            "'{$this->objectid}'.";
     }
 
     /**
