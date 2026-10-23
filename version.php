@@ -24,8 +24,8 @@
 
 defined('MOODLE_INTERNAL') || die;
 
-$plugin->version = 2026101501;
-$plugin->release = '1.0.5';
+$plugin->version = 2026102300;
+$plugin->release = '1.0.6';
 $plugin->component = 'mod_videotrackermax';
 $plugin->requires = 2024100700;
 $plugin->maturity = MATURITY_STABLE;
