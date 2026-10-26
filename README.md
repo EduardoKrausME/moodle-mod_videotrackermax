@@ -4,12 +4,6 @@ Video Tracker Max is a Moodle activity focused on collective video analytics: he
 
 Playback and tracking are deliberately delegated to [local_video_bridge](https://github.com/EduardoKrausME/moodle-local_video_bridge). The activity contains no provider-specific player code and does not read Video Bridge internal tables when a public API exists.
 
-## Requirements and installation
-
-**Required dependency:** [Moodle Video Bridge (`local_video_bridge`)](https://github.com/EduardoKrausME/moodle-local_video_bridge), version `2026100614` or later. The Video Bridge plugin is not bundled with this activity; install it in `local/video_bridge` before installing or upgrading `mod_videotrackermax`.
-
-Video Bridge requires Moodle 4.5 or later and currently also depends on `local_ai_bridge`. Install its dependencies and complete the upgrade through **Site administration > Notifications**. An installation limited to plugins available on the Moodle Marketplace must ensure that these required plugins are available there; the activity cannot run without Video Bridge.
-
 ## What the dashboards mean
 
 **Viewing heatmap** shows how many learners actually watched each part of the video. A strong area means more unique learners reached that bucket; it does not mean they understood the content.
@@ -48,7 +42,6 @@ CSV exports contain consolidated report metrics, not internal bridge telemetry.
 ## Completion
 
 Custom completion uses the authoritative normalized percentage stored by Video Bridge. Video Tracker Max does not maintain a competing progress percentage, and a Video Bridge analytics update triggers Moodle completion re-evaluation immediately.
-
 
 ## Comparisons and individual drill-down
 
